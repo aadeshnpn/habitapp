@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/habits/presentation/home_screen.dart';
 import '../features/habits/presentation/habit_detail_screen.dart';
@@ -11,7 +12,7 @@ import '../features/settings/presentation/settings_screen.dart';
 
 // Named route constants
 class AppRoutes {
-  static const String onboarding = '/';
+  static const String onboarding = '/onboarding';
   static const String home = '/home';
   static const String habitDetail = '/habit/:id';
   static const String addHabit = '/habit/add';
@@ -22,11 +23,18 @@ class AppRoutes {
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: '/home',
     debugLogDiagnostics: true,
+    redirect: (context, state) async {
+      final prefs = await SharedPreferences.getInstance();
+      final done = prefs.getBool('onboarding_complete') ?? false;
+      if (!done && state.uri.path != '/onboarding') return '/onboarding';
+      if (done && state.uri.path == '/onboarding') return '/home';
+      return null;
+    },
     routes: [
       GoRoute(
-        path: '/',
+        path: '/onboarding',
         name: 'onboarding',
         builder: (context, state) => const OnboardingScreen(),
       ),
