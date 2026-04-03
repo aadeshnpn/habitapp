@@ -4,6 +4,7 @@ import '../../../features/habits/domain/layout_preference_provider.dart';
 import '../../../shared/theme/theme_provider.dart';
 import '../../../shared/widgets/freeze_token_display.dart';
 import 'notification_settings_section.dart';
+import 'sync_settings_section.dart';
 import 'widgets/palette_picker_sheet.dart';
 import 'widgets/theme_mode_selector.dart';
 
@@ -145,6 +146,15 @@ class SettingsScreen extends ConsumerWidget {
             ),
             trailing: const FreezeTokenDisplay(tokenCount: 0),
           ),
+
+          const Divider(height: 1),
+
+          // ----------------------------------------------------------------
+          // Section: Cloud Sync
+          // ----------------------------------------------------------------
+          const _SectionHeader(title: 'Cloud Sync'),
+
+          const SyncSettingsSection(),
 
           const Divider(height: 1),
 
