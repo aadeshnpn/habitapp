@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../checkin/domain/checkin_repository.dart';
-import '../../../streaks/domain/streak_providers.dart';
+import '../../../features/streaks/domain/streak_calculator.dart';
+import '../../../shared/widgets/celebration_overlay.dart';
+import '../../checkin/domain/checkin_repository.dart';
+import '../../checkin/domain/checkin_service.dart';
+import '../../streaks/domain/streak_providers.dart';
 import '../data/habit_model.dart';
 import '../domain/habit_providers.dart';
 import '../domain/layout_preference_provider.dart';
@@ -52,15 +55,155 @@ final streakCountsProvider = FutureProvider<Map<String, int>>((ref) async {
 // HomeScreen
 // ---------------------------------------------------------------------------
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  /// The active celebration overlay, if any.
+  OverlayEntry? _celebrationEntry;
 
   String _todayTitle() {
     return DateFormat('EEEE, MMM d').format(DateTime.now());
   }
 
+  // ---------------------------------------------------------------------------
+  // Celebration helpers
+  // ---------------------------------------------------------------------------
+
+  CelebrationTier _tierFor(MilestoneTier m) => switch (m) {
+        MilestoneTier.week => CelebrationTier.major,
+        MilestoneTier.twoWeeks => CelebrationTier.major,
+        MilestoneTier.month => CelebrationTier.epic,
+        MilestoneTier.twoMonths => CelebrationTier.epic,
+        MilestoneTier.century => CelebrationTier.epic,
+        MilestoneTier.year => CelebrationTier.epic,
+      };
+
+  String _messageFor(MilestoneTier m, String habitName) => switch (m) {
+        MilestoneTier.week => '7 days of $habitName! 🔥',
+        MilestoneTier.twoWeeks => '2 weeks strong! Keep going 💪',
+        MilestoneTier.month => '30 days! You\'re unstoppable 🏆',
+        MilestoneTier.twoMonths => '60 days — this is a real habit now 🌟',
+        MilestoneTier.century => '100 DAYS! Legendary 🎉',
+        MilestoneTier.year => '365 days. One full year. Incredible 🥇',
+      };
+
+  void _showCelebration({
+    required MilestoneTier milestone,
+    required int streakCount,
+    required String habitName,
+  }) {
+    _celebrationEntry?.remove();
+    _celebrationEntry = OverlayEntry(
+      builder: (context) => CelebrationOverlay(
+        message: _messageFor(milestone, habitName),
+        streakCount: streakCount,
+        tier: _tierFor(milestone),
+        onDismiss: () {
+          _celebrationEntry?.remove();
+          _celebrationEntry = null;
+        },
+      ),
+    );
+    Overlay.of(context).insert(_celebrationEntry!);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Check-in handler
+  // ---------------------------------------------------------------------------
+
+  Future<void> _handleComplete(
+    List<Habit> habits,
+    String habitId,
+  ) async {
+    final habit = habits.firstWhere((h) => h.id == habitId);
+    final habitIndex = habits.indexOf(habit);
+    final checkInService = ref.read(checkInServiceProvider);
+
+    CheckInResult? result;
+
+    if (habit.checkInType == CheckInType.tap) {
+      result = await checkInService.completeHabit(
+        habit: habit,
+        habitIndex: habitIndex,
+      );
+    } else {
+      // Show bottom sheet for note/quantity
+      if (mounted) {
+        result = await CheckInBottomSheet.show(
+          context,
+          habit: habit,
+          habitIndex: habitIndex,
+          checkInService: checkInService,
+          currentStreak: ref
+                  .read(streakDataProvider(habitId))
+                  .valueOrNull
+                  ?.currentStreak ??
+              0,
+        );
+      }
+    }
+
+    // Invalidate providers to refresh UI
+    ref.invalidate(completedTodayProvider);
+    ref.invalidate(streakCountsProvider);
+    ref.invalidate(atRiskHabitsProvider);
+    ref.invalidate(streakDataProvider(habitId));
+    ref.invalidate(activeHabitsProvider);
+
+    if (result == null || !mounted) return;
+
+    if (result.alreadyCompleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Already done today!'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Show celebration overlay if milestone reached
+    if (result.milestone != null && result.streak != null) {
+      _showCelebration(
+        milestone: result.milestone!,
+        streakCount: result.streak!.currentStreak,
+        habitName: habit.name,
+      );
+    } else if (result.isNewPersonalBest && result.streak != null) {
+      // New personal best banner
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'New personal best! ${result.streak!.currentStreak} day streak 🎯',
+          ),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(seconds: 3),
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        ),
+      );
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void dispose() {
+    _celebrationEntry?.remove();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final habitsAsync = ref.watch(activeHabitsProvider);
     final layoutAsync = ref.watch(layoutPreferenceProvider);
     final completedAsync = ref.watch(completedTodayProvider);
@@ -128,32 +271,8 @@ class HomeScreen extends ConsumerWidget {
           // Choose layout
           final layout = layoutAsync.valueOrNull ?? HomeLayout.cardList;
 
-          void handleComplete(String habitId) async {
-            final habit = habits.firstWhere((h) => h.id == habitId);
-            if (habit.checkInType == CheckInType.tap) {
-              // Direct tap check-in
-              final repo = ref.read(checkInRepositoryProvider);
-              await repo.recordCheckIn(habitId);
-              ref.invalidate(completedTodayProvider);
-              ref.invalidate(streakCountsProvider);
-              ref.invalidate(atRiskHabitsProvider);
-              ref.invalidate(streakDataProvider(habitId));
-            } else {
-              // Show bottom sheet for note/quantity
-              if (context.mounted) {
-                await CheckInBottomSheet.show(
-                  context,
-                  habitId: habitId,
-                  habitName: habit.name,
-                  checkInType: habit.checkInType,
-                  quantityUnit: habit.quantityUnit,
-                );
-                ref.invalidate(completedTodayProvider);
-                ref.invalidate(streakCountsProvider);
-                ref.invalidate(atRiskHabitsProvider);
-                ref.invalidate(streakDataProvider(habitId));
-              }
-            }
+          void handleComplete(String habitId) {
+            _handleComplete(habits, habitId);
           }
 
           void handleTap(String habitId) {

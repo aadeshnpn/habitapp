@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_service.dart';
+import '../../../core/notifications/notification_providers.dart';
 import '../../checkin/data/checkin_dao.dart';
 import '../../checkin/domain/checkin_repository.dart';
+import '../../checkin/domain/checkin_service.dart';
 import '../../streaks/data/streak_dao.dart';
+import '../../streaks/domain/streak_providers.dart';
 import '../data/habit_dao.dart';
 import '../data/habit_model.dart';
 import 'habit_repository.dart';
@@ -60,4 +63,16 @@ final activeHabitsProvider = FutureProvider<List<Habit>>((ref) {
 
 final archivedHabitsProvider = FutureProvider<List<Habit>>((ref) {
   return ref.watch(habitRepositoryProvider).getArchivedHabits();
+});
+
+// ---------------------------------------------------------------------------
+// CheckInService provider
+// ---------------------------------------------------------------------------
+
+final checkInServiceProvider = Provider<CheckInService>((ref) {
+  return CheckInService(
+    ref.watch(checkInRepositoryProvider),
+    ref.watch(streakServiceProvider),
+    ref.watch(notificationSchedulerProvider),
+  );
 });
