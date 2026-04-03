@@ -3,7 +3,7 @@ import 'package:path/path.dart' as p;
 
 class DatabaseService {
   static const String _dbName = 'habit_tracker.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
 
   // Singleton
   static final DatabaseService instance = DatabaseService._();
@@ -79,10 +79,75 @@ class DatabaseService {
         value TEXT NOT NULL
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE habit_labels (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        emoji TEXT NOT NULL DEFAULT '🏷️',
+        color INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE habit_label_assignments (
+        habit_id TEXT NOT NULL,
+        label_id TEXT NOT NULL,
+        PRIMARY KEY (habit_id, label_id),
+        FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE,
+        FOREIGN KEY (label_id) REFERENCES habit_labels(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE label_streaks (
+        label_id TEXT PRIMARY KEY,
+        current_streak INTEGER NOT NULL DEFAULT 0,
+        best_streak INTEGER NOT NULL DEFAULT 0,
+        total_days INTEGER NOT NULL DEFAULT 0,
+        state TEXT NOT NULL DEFAULT 'active',
+        last_active_day TEXT,
+        FOREIGN KEY (label_id) REFERENCES habit_labels(id) ON DELETE CASCADE
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Future schema migrations go here.
+    if (oldVersion < 2) {
+      // Add label tables
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS habit_labels (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          emoji TEXT NOT NULL DEFAULT '🏷️',
+          color INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS habit_label_assignments (
+          habit_id TEXT NOT NULL,
+          label_id TEXT NOT NULL,
+          PRIMARY KEY (habit_id, label_id),
+          FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE,
+          FOREIGN KEY (label_id) REFERENCES habit_labels(id) ON DELETE CASCADE
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS label_streaks (
+          label_id TEXT PRIMARY KEY,
+          current_streak INTEGER NOT NULL DEFAULT 0,
+          best_streak INTEGER NOT NULL DEFAULT 0,
+          total_days INTEGER NOT NULL DEFAULT 0,
+          state TEXT NOT NULL DEFAULT 'active',
+          last_active_day TEXT,
+          FOREIGN KEY (label_id) REFERENCES habit_labels(id) ON DELETE CASCADE
+        )
+      ''');
+    }
   }
 
   /// Close the underlying database. Primarily useful in tests.

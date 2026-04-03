@@ -9,6 +9,8 @@ import '../features/habits/presentation/add_habit_screen.dart';
 import '../features/habits/presentation/edit_habit_screen.dart';
 import '../features/stats/presentation/stats_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/labels/presentation/labels_screen.dart';
+import '../features/labels/presentation/label_detail_screen.dart';
 
 // Named route constants
 class AppRoutes {
@@ -19,6 +21,8 @@ class AppRoutes {
   static const String editHabit = '/habit/:id/edit';
   static const String stats = '/stats';
   static const String settings = '/settings';
+  static const String labels = '/labels';
+  static const String labelDetail = '/labels/:id';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -75,6 +79,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/labels',
+        name: 'labels',
+        builder: (context, state) => const LabelsScreen(),
+      ),
+      GoRoute(
+        path: '/labels/:id',
+        name: 'labelDetail',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return LabelDetailScreen(labelId: id);
+        },
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
