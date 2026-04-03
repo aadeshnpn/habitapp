@@ -1,42 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:habit_tracker/features/checkin/domain/checkin_repository.dart';
+import 'package:habit_tracker/features/checkin/domain/checkin_service.dart';
 import 'package:habit_tracker/features/habits/data/habit_model.dart';
-import 'package:habit_tracker/features/habits/domain/habit_providers.dart';
 
 class CheckInBottomSheet extends ConsumerStatefulWidget {
-  final String habitId;
-  final String habitName;
-  final CheckInType checkInType;
-  final String? quantityUnit;
+  final Habit habit;
+  final int habitIndex;
+  final CheckInService checkInService;
+  final int currentStreak;
 
   const CheckInBottomSheet({
     super.key,
-    required this.habitId,
-    required this.habitName,
-    required this.checkInType,
-    this.quantityUnit,
+    required this.habit,
+    required this.habitIndex,
+    required this.checkInService,
+    required this.currentStreak,
   });
 
-  static Future<void> show(
+  /// Shows the bottom sheet and returns a [CheckInResult] if a check-in was
+  /// submitted, or null if the user cancelled.
+  static Future<CheckInResult?> show(
     BuildContext context, {
-    required String habitId,
-    required String habitName,
-    required CheckInType checkInType,
-    String? quantityUnit,
+    required Habit habit,
+    required int habitIndex,
+    required CheckInService checkInService,
+    required int currentStreak,
   }) {
-    return showModalBottomSheet(
+    return showModalBottomSheet<CheckInResult>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => CheckInBottomSheet(
-        habitId: habitId,
-        habitName: habitName,
-        checkInType: checkInType,
-        quantityUnit: quantityUnit,
+        habit: habit,
+        habitIndex: habitIndex,
+        checkInService: checkInService,
+        currentStreak: currentStreak,
       ),
     );
   }
@@ -50,6 +51,7 @@ class _CheckInBottomSheetState extends ConsumerState<CheckInBottomSheet> {
   final _noteController = TextEditingController();
   final _quantityController = TextEditingController();
   bool _isSaving = false;
+  String? _validationError;
 
   @override
   void dispose() {
@@ -58,35 +60,70 @@ class _CheckInBottomSheetState extends ConsumerState<CheckInBottomSheet> {
     super.dispose();
   }
 
+  bool _validate() {
+    if (widget.habit.checkInType == CheckInType.quantity) {
+      final text = _quantityController.text.trim();
+      final value = double.tryParse(text);
+      if (value == null || value <= 0) {
+        setState(() => _validationError = 'Please enter a quantity greater than 0');
+        return false;
+      }
+    }
+    setState(() => _validationError = null);
+    return true;
+  }
+
+  void _stepQuantity(double delta) {
+    final current = double.tryParse(_quantityController.text.trim()) ?? 0.0;
+    final next = (current + delta).clamp(0.0, double.infinity);
+    // Format without trailing zeros for whole numbers
+    final formatted = next == next.truncateToDouble()
+        ? next.toInt().toString()
+        : next.toString();
+    _quantityController.text = formatted;
+    _quantityController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _quantityController.text.length),
+    );
+    setState(() => _validationError = null);
+  }
+
   Future<void> _submit() async {
     if (_isSaving) return;
+    if (!_validate()) return;
+
     setState(() => _isSaving = true);
 
     try {
-      final repo = ref.read(checkInRepositoryProvider);
-      final note = widget.checkInType == CheckInType.note
+      final note = widget.habit.checkInType == CheckInType.note
           ? _noteController.text.trim().isEmpty
               ? null
               : _noteController.text.trim()
           : null;
-      final quantity = widget.checkInType == CheckInType.quantity
+      final quantity = widget.habit.checkInType == CheckInType.quantity
           ? double.tryParse(_quantityController.text.trim())
           : null;
 
-      await repo.recordCheckIn(widget.habitId, note: note, quantity: quantity);
+      final result = await widget.checkInService.completeHabit(
+        habit: widget.habit,
+        habitIndex: widget.habitIndex,
+        note: note,
+        quantity: quantity,
+      );
 
       if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Logged!'),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+        Navigator.of(context).pop(result);
+        if (!result.alreadyCompleted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Logged!'),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              duration: const Duration(seconds: 2),
             ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -105,6 +142,7 @@ class _CheckInBottomSheetState extends ConsumerState<CheckInBottomSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final mediaQuery = MediaQuery.of(context);
+    final isQuantity = widget.habit.checkInType == CheckInType.quantity;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -132,17 +170,33 @@ class _CheckInBottomSheetState extends ConsumerState<CheckInBottomSheet> {
 
           // Habit name header
           Text(
-            widget.habitName,
+            widget.habit.name,
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 6),
+
+          // Streak badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('🔥', style: TextStyle(fontSize: 14)),
+              const SizedBox(width: 4),
+              Text(
+                '${widget.currentStreak} day streak',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 4),
+
           Text(
-            widget.checkInType == CheckInType.note
-                ? 'Add a note for today'
-                : 'Log your quantity',
+            isQuantity ? 'Log your quantity' : 'Add a note for today',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -151,7 +205,7 @@ class _CheckInBottomSheetState extends ConsumerState<CheckInBottomSheet> {
           const SizedBox(height: 24),
 
           // Input field
-          if (widget.checkInType == CheckInType.note)
+          if (widget.habit.checkInType == CheckInType.note)
             TextField(
               controller: _noteController,
               maxLines: 3,
@@ -165,53 +219,147 @@ class _CheckInBottomSheetState extends ConsumerState<CheckInBottomSheet> {
               textCapitalization: TextCapitalization.sentences,
               autofocus: true,
             )
-          else if (widget.checkInType == CheckInType.quantity)
-            TextField(
-              controller: _quantityController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
-              decoration: InputDecoration(
-                hintText: '0',
-                suffixText: widget.quantityUnit,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+          else if (isQuantity) ...[
+            Row(
+              children: [
+                // Decrement stepper
+                _StepperButton(
+                  icon: Icons.remove,
+                  onTap: () => _stepQuantity(-1),
                 ),
-                contentPadding: const EdgeInsets.all(16),
+                const SizedBox(width: 12),
+                // Text field
+                Expanded(
+                  child: TextField(
+                    controller: _quantityController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                    ],
+                    decoration: InputDecoration(
+                      hintText: '0',
+                      suffixText: widget.habit.quantityUnit,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                      errorText: _validationError,
+                    ),
+                    textAlign: TextAlign.center,
+                    autofocus: true,
+                    onChanged: (_) => setState(() => _validationError = null),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Increment stepper
+                _StepperButton(
+                  icon: Icons.add,
+                  onTap: () => _stepQuantity(1),
+                ),
+              ],
+            ),
+          ],
+
+          // Validation error for note type (quantity error shown inline above)
+          if (_validationError != null &&
+              widget.habit.checkInType != CheckInType.quantity)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _validationError!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
-              autofocus: true,
             ),
 
           const SizedBox(height: 24),
 
-          // Confirm button
-          FilledButton(
-            onPressed: _isSaving ? null : _submit,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+          // Action buttons: Cancel + Confirm
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () => Navigator.of(context).pop(null),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  )
-                : const Text(
-                    'Confirm',
+                  ),
+                  child: const Text(
+                    'Cancel',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: _isSaving ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Confirm',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A round icon button used as a stepper control.
+class _StepperButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _StepperButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(
+            icon,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+        ),
       ),
     );
   }
