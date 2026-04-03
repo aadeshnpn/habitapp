@@ -1,4 +1,5 @@
 import '../../habits/data/habit_model.dart';
+import '../../labels/domain/label_repository.dart';
 import '../../streaks/data/streak_model.dart';
 import '../../streaks/domain/streak_calculator.dart';
 import '../../streaks/domain/streak_service.dart';
@@ -8,17 +9,20 @@ import 'checkin_repository.dart';
 /// Orchestrates the full check-in flow:
 ///   1. Records the check-in in the DB
 ///   2. Updates the streak via StreakService
+///   3b. Updates label streaks for any labels assigned to this habit
 ///   3. Triggers notifications (cancel at-risk, send milestone if earned)
 ///   4. Returns a CheckInResult describing what happened
 class CheckInService {
   final CheckInRepository _checkInRepo;
   final StreakService _streakService;
   final NotificationScheduler _scheduler;
+  final LabelRepository _labelRepo;
 
   const CheckInService(
     this._checkInRepo,
     this._streakService,
     this._scheduler,
+    this._labelRepo,
   );
 
   Future<CheckInResult> completeHabit({
@@ -47,6 +51,9 @@ class CheckInService {
       frequencyType: habit.frequencyType,
       daysOfWeek: habit.daysOfWeek,
     );
+
+    // 3b. Update label streaks for any labels assigned to this habit
+    await _labelRepo.onHabitCheckIn(habit.id, DateTime.now());
 
     // 4. Detect milestone
     final milestone =

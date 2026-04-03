@@ -322,11 +322,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Today'),
           NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Stats'),
+          NavigationDestination(icon: Icon(Icons.label_outline), label: 'Labels'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
         ],
         onDestinationSelected: (i) {
           if (i == 1) context.go('/stats');
-          if (i == 2) context.go('/settings');
+          if (i == 2) context.go('/labels');
+          if (i == 3) context.go('/settings');
         },
       ),
     );

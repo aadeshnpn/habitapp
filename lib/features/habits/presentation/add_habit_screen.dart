@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../data/habit_model.dart';
 import '../domain/habit_providers.dart';
 import '../domain/habit_repository.dart';
+import '../../labels/domain/label_providers.dart';
+import '../../labels/presentation/widgets/label_chip_selector.dart';
 import 'widgets/frequency_selector.dart';
 import 'widgets/checkin_type_selector.dart';
 
@@ -43,6 +45,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
   CheckInType _checkInType = CheckInType.tap;
   String? _quantityUnit;
   TimeOfDay? _reminderTime;
+  List<String> _selectedLabelIds = [];
   bool _isSaving = false;
 
   @override
@@ -94,7 +97,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
     setState(() => _isSaving = true);
     try {
       final repo = ref.read(habitRepositoryProvider);
-      await repo.createHabit(
+      final habit = await repo.createHabit(
         CreateHabitParams(
           name: _nameController.text.trim(),
           icon: _selectedEmoji,
@@ -113,7 +116,12 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
           reminderTime: _formatReminderTime(),
         ),
       );
+      if (_selectedLabelIds.isNotEmpty) {
+        final labelRepo = ref.read(labelRepositoryProvider);
+        await labelRepo.setHabitLabels(habit.id, _selectedLabelIds);
+      }
       ref.invalidate(activeHabitsProvider);
+      ref.invalidate(allLabelsProvider);
       if (mounted) context.pop();
     } catch (e) {
       if (mounted) {
@@ -221,6 +229,27 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
                 quantityUnit: _quantityUnit,
                 onTypeChanged: (t) => setState(() => _checkInType = t),
                 onUnitChanged: (u) => setState(() => _quantityUnit = u),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Labels
+            _SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Labels',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  LabelChipSelector(
+                    selectedLabelIds: _selectedLabelIds,
+                    onChanged: (ids) => setState(() => _selectedLabelIds = ids),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

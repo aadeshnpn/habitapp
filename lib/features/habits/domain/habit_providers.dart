@@ -5,6 +5,7 @@ import '../../../core/notifications/notification_providers.dart';
 import '../../checkin/data/checkin_dao.dart';
 import '../../checkin/domain/checkin_repository.dart';
 import '../../checkin/domain/checkin_service.dart';
+import '../../labels/domain/label_providers.dart';
 import '../../streaks/data/streak_dao.dart';
 import '../../streaks/domain/streak_providers.dart';
 import '../data/habit_dao.dart';
@@ -74,5 +75,6 @@ final checkInServiceProvider = Provider<CheckInService>((ref) {
     ref.watch(checkInRepositoryProvider),
     ref.watch(streakServiceProvider),
     ref.watch(notificationSchedulerProvider),
+    ref.watch(labelRepositoryProvider),
   );
 });
