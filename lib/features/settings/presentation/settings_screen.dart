@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../features/habits/domain/layout_preference_provider.dart';
 import '../../../shared/theme/app_palette.dart';
 import '../../../shared/theme/theme_provider.dart';
+import '../../../shared/widgets/app_nav_bar.dart';
 import '../../../shared/widgets/freeze_token_display.dart';
 import 'notification_settings_section.dart';
 import 'sync_settings_section.dart';
@@ -24,6 +25,7 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Settings'),
       ),
+      bottomNavigationBar: const AppNavBar(currentIndex: 3),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [

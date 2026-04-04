@@ -16,8 +16,9 @@ class LayoutToggleButton extends ConsumerWidget {
     }
   }
 
-  static IconData _iconFor(HomeLayout layout) {
-    switch (layout) {
+  // Icon and label describe the NEXT layout (what you'll switch TO).
+  static IconData _iconFor(HomeLayout next) {
+    switch (next) {
       case HomeLayout.cardList:
         return Icons.view_list;
       case HomeLayout.iconGrid:
@@ -27,36 +28,65 @@ class LayoutToggleButton extends ConsumerWidget {
     }
   }
 
-  static String _tooltipFor(HomeLayout layout) {
-    switch (layout) {
+  static String _labelFor(HomeLayout current) {
+    switch (current) {
       case HomeLayout.cardList:
-        return 'Card list view';
+        return 'List';
       case HomeLayout.iconGrid:
-        return 'Icon grid view';
+        return 'Grid';
       case HomeLayout.rings:
-        return 'Rings view';
+        return 'Rings';
+    }
+  }
+
+  static String _tooltipFor(HomeLayout next) {
+    switch (next) {
+      case HomeLayout.cardList:
+        return 'Switch to card list';
+      case HomeLayout.iconGrid:
+        return 'Switch to icon grid';
+      case HomeLayout.rings:
+        return 'Switch to rings view';
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final layoutAsync = ref.watch(layoutPreferenceProvider);
+    final theme = Theme.of(context);
 
     return layoutAsync.when(
-      data: (layout) => IconButton(
-        icon: Icon(_iconFor(layout)),
-        tooltip: _tooltipFor(layout),
-        onPressed: () {
-          final next = _nextLayout(layout);
-          ref.read(layoutPreferenceProvider.notifier).setLayout(next);
-        },
-      ),
-      loading: () => const SizedBox(
-        width: 48,
-        height: 48,
-        child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-      ),
-      error: (_, __) => const Icon(Icons.view_list),
+      data: (layout) {
+        final next = _nextLayout(layout);
+        return Tooltip(
+          message: _tooltipFor(next),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              ref.read(layoutPreferenceProvider.notifier).setLayout(next);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_iconFor(layout), size: 18,
+                      color: theme.colorScheme.onSurface),
+                  const SizedBox(width: 4),
+                  Text(
+                    _labelFor(layout),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox(width: 48),
+      error: (_, __) => const SizedBox(width: 48),
     );
   }
 }

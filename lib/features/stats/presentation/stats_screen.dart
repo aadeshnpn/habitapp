@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/app_nav_bar.dart';
 import '../../habits/data/habit_model.dart';
 import '../../habits/domain/habit_providers.dart';
 import '../domain/stats_providers.dart';
@@ -25,6 +26,7 @@ class StatsScreen extends ConsumerWidget {
         centerTitle: false,
         elevation: 0,
       ),
+      bottomNavigationBar: const AppNavBar(currentIndex: 1),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(overallCompletionRateProvider);

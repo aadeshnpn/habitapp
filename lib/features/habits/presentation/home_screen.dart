@@ -14,6 +14,7 @@ import '../domain/layout_preference_provider.dart';
 import 'layouts/card_list_layout.dart';
 import 'layouts/icon_grid_layout.dart';
 import 'layouts/rings_layout.dart';
+import '../../../shared/widgets/app_nav_bar.dart';
 import 'widgets/checkin_bottom_sheet.dart';
 import 'widgets/layout_toggle_button.dart';
 
@@ -317,20 +318,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tooltip: 'Add habit',
         child: const Icon(Icons.add),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home), label: 'Today'),
-          NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Stats'),
-          NavigationDestination(icon: Icon(Icons.label_outline), label: 'Labels'),
-          NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-        ],
-        onDestinationSelected: (i) {
-          if (i == 1) context.go('/stats');
-          if (i == 2) context.go('/labels');
-          if (i == 3) context.go('/settings');
-        },
-      ),
+      bottomNavigationBar: const AppNavBar(currentIndex: 0),
     );
   }
 }

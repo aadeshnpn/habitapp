@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../shared/widgets/app_nav_bar.dart';
 import '../data/label_model.dart';
 import '../domain/label_providers.dart';
 import '../domain/label_repository.dart';
@@ -25,6 +26,7 @@ class LabelsScreen extends ConsumerWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(currentIndex: 2),
       body: labelsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
