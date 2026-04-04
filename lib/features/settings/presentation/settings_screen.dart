@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../features/habits/domain/layout_preference_provider.dart';
+import '../../../shared/theme/app_palette.dart';
 import '../../../shared/theme/theme_provider.dart';
 import '../../../shared/widgets/freeze_token_display.dart';
 import 'notification_settings_section.dart';

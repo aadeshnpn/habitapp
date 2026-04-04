@@ -45,7 +45,7 @@ class CheckInTypeSelector extends StatelessWidget {
             ButtonSegment(
               value: CheckInType.quantity,
               label: Text('Quantity'),
-              icon: Icon(Icons.123, size: 16),
+              icon: Icon(Icons.pin_outlined, size: 16),
             ),
           ],
           selected: {value},

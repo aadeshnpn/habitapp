@@ -1,3 +1,5 @@
+import 'package:sqflite/sqflite.dart';
+
 import '../../../core/database/database_service.dart';
 import 'label_model.dart';
 
@@ -79,7 +81,7 @@ class LabelDao {
     await db.insert(
       'habit_label_assignments',
       {'habit_id': habitId, 'label_id': labelId},
-      conflictAlgorithm: 5, // ConflictAlgorithm.replace
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
@@ -133,7 +135,7 @@ class LabelDao {
     await db.insert(
       'label_streaks',
       streak.toMap(),
-      conflictAlgorithm: 5, // ConflictAlgorithm.replace
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 }

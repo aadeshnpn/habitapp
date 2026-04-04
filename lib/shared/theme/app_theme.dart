@@ -20,7 +20,7 @@ class AppTheme {
       scaffoldBackgroundColor: brightness == Brightness.light
           ? AppColors.surfaceLight
           : AppColors.surfaceDark,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: brightness == Brightness.light ? AppColors.cardLight : AppColors.cardDark,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

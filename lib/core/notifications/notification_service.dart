@@ -81,6 +81,8 @@ class NotificationService {
       _notifDetails(),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       payload: habitId,
     );
   }
@@ -116,6 +118,8 @@ class NotificationService {
         scheduledDate,
         _notifDetails(),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
         payload: habitId,
       );
     }
@@ -150,6 +154,8 @@ class NotificationService {
       scheduledDate,
       _notifDetails(),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       payload: habitId,
     );
   }
