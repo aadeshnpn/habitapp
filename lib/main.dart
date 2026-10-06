@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'app.dart';
+import 'core/notifications/notification_providers.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/background/background_sync_manager.dart';
 import 'firebase_options.dart';
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,7 +27,6 @@ void main() async {
     debugPrint('Firebase initializeApp notice: $e');
   }
 
-
   // Initialize notifications, background Garmin AI sync, and request permission on Android.
   if (!kIsWeb) {
     await NotificationService.instance.initialize();
@@ -35,6 +34,14 @@ void main() async {
     await BackgroundSyncManager.initialize();
   }
 
+  final container = ProviderContainer();
+  if (!kIsWeb) {
+    // Kick a full reschedule at startup (not only when Home is visible).
+    container.read(scheduleNotificationsProvider);
+  }
 
-  runApp(const ProviderScope(child: HabitTrackerApp()));
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: const HabitTrackerApp(),
+  ));
 }

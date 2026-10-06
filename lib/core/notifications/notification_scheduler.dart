@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../features/habits/data/habit_model.dart';
+import '../../features/mindfulness_bell/domain/mindfulness_bell_config.dart';
+import '../../features/mindfulness_bell/domain/mindfulness_bell_scheduler.dart';
+import '../../features/reminders/data/interval_reminder_model.dart';
 import '../../features/streaks/data/streak_model.dart';
 import '../../features/streaks/domain/streak_calculator.dart';
-import '../../features/reminders/data/interval_reminder_model.dart';
+import 'notification_ids.dart';
 import 'notification_service.dart';
 
 class NotificationScheduler {
@@ -16,26 +20,23 @@ class NotificationScheduler {
   // Called after every check-in
   // ---------------------------------------------------------------------------
 
-  /// Cancel the at-risk alert for this habit, and fire a milestone celebration
-  /// if the updated streak sits on a milestone tier.
+  /// Cancel the daily + at-risk alerts for this habit, and fire a milestone
+  /// celebration if the updated streak sits on a milestone tier.
   Future<void> onCheckInCompleted({
-    required int habitIndex,
     required String habitId,
     required String habitName,
     required String habitIcon,
     required StreakData updatedStreak,
+    @Deprecated('Use habitId for stable notification IDs') int? habitIndex,
   }) async {
-    // Cancel the daily reminder and at-risk notification — the habit has been completed.
-    await _service.cancelNotification(1000 + habitIndex);
-    await _service.cancelNotification(2000 + habitIndex);
+    await _service.cancelNotification(NotificationIds.daily(habitId));
+    await _service.cancelNotification(NotificationIds.atRisk(habitId));
 
-    // Fire milestone if this streak lands on a celebrated tier.
     final tier =
         StreakCalculator.getMilestoneTier(updatedStreak.currentStreak);
     if (tier != null) {
       final prefs = await SharedPreferences.getInstance();
-      final milestoneEnabled =
-          prefs.getBool('notif_milestone') ?? true;
+      final milestoneEnabled = prefs.getBool('notif_milestone') ?? true;
       if (milestoneEnabled) {
         await _service.sendMilestoneCelebration(
           habitName: habitName,
@@ -50,29 +51,24 @@ class NotificationScheduler {
   // Called on app open — refresh all scheduled notifications from scratch
   // ---------------------------------------------------------------------------
 
-  /// Cancel and reschedule every notification based on the current habit list
-  /// and streak states. Respects user-level toggle preferences stored in
-  /// SharedPreferences.
-  Future<void> refreshAll(
-      List<Habit> habits, List<StreakData> streaks, Set<String> completedToday) async {
+  /// Cancel and reschedule every habit notification based on the current habit
+  /// list and streak states. Respects user-level toggle preferences.
+  Future<void> refreshAll(List<Habit> habits, List<StreakData> streaks,
+      Set<String> completedToday) async {
     final prefs = await SharedPreferences.getInstance();
     final dailyEnabled = prefs.getBool('notif_daily') ?? true;
     final atRiskEnabled = prefs.getBool('notif_atrisk') ?? true;
     final repairEnabled = prefs.getBool('notif_repair') ?? true;
 
-    // Build a fast lookup: habitId -> StreakData
     final streakMap = {for (final s in streaks) s.habitId: s};
 
-    for (var i = 0; i < habits.length; i++) {
-      final habit = habits[i];
+    for (final habit in habits) {
       final streak = streakMap[habit.id];
 
-      // --- Daily reminder ---
       if (dailyEnabled && habit.reminderTime != null) {
         final tod = NotificationScheduler._parseTimeOfDay(habit.reminderTime!);
         if (tod != null) {
           await _service.scheduleHabitReminder(
-            index: i,
             habitId: habit.id,
             habitName: habit.name,
             habitIcon: habit.icon,
@@ -81,66 +77,72 @@ class NotificationScheduler {
           );
         }
       } else {
-        // Reminder time cleared or toggle off — cancel existing.
-        await _service.cancelNotification(1000 + i);
+        await _service.cancelNotification(NotificationIds.daily(habit.id));
       }
 
       if (streak == null) continue;
 
-      // --- Streak at-risk alert ---
       if (atRiskEnabled && streak.state == StreakState.atRisk) {
         await _service.scheduleStreakAtRiskAlert(
-          index: i,
           habitId: habit.id,
           habitName: habit.name,
           streak: streak.currentStreak,
         );
       } else {
-        await _service.cancelNotification(2000 + i);
+        await _service.cancelNotification(NotificationIds.atRisk(habit.id));
       }
 
-      // --- Streak repair reminder ---
       if (repairEnabled &&
           streak.state == StreakState.broken &&
           streak.freezeTokens > 0 &&
           streak.currentStreak > 0) {
         await _service.scheduleStreakRepairReminder(
-          index: i,
           habitId: habit.id,
           habitName: habit.name,
           lostStreak: streak.currentStreak,
         );
       } else {
-        await _service.cancelNotification(3000 + i);
+        await _service.cancelNotification(NotificationIds.repair(habit.id));
       }
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Called on app open — refresh interval reminder notifications
-  // ---------------------------------------------------------------------------
-
   /// Schedule or cancel interval reminder notifications based on [reminders].
-  /// Each active reminder gets one `zonedSchedule` per time slot in its window.
   Future<void> refreshIntervalReminders(
       List<IntervalReminder> reminders) async {
     final prefs = await SharedPreferences.getInstance();
     final intervalsEnabled = prefs.getBool('notif_intervals') ?? true;
 
-    for (var i = 0; i < reminders.length; i++) {
-      final reminder = reminders[i];
+    for (final reminder in reminders) {
       if (intervalsEnabled && reminder.isActive) {
         await _service.scheduleIntervalReminder(
-          reminderIndex: i,
           reminderId: reminder.id,
           reminderName: reminder.name,
           reminderIcon: reminder.icon,
           slots: reminder.dailySlots,
         );
       } else {
-        await _service.cancelIntervalReminder(i);
+        await _service.cancelIntervalReminder(reminder.id);
       }
     }
+  }
+
+  /// Schedule or cancel mindfulness bell one-shots from [config].
+  Future<void> refreshMindfulnessBell(MindfulnessBellConfig config) async {
+    if (!config.enabled) {
+      await _service.cancelMindfulnessBells();
+      return;
+    }
+
+    final now = tz.TZDateTime.now(tz.local);
+    final slots = MindfulnessBellScheduler.generateSlots(
+      config: config,
+      now: now,
+    );
+    await _service.scheduleMindfulnessBells(
+      soundId: config.soundId,
+      whenList: slots,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -148,7 +150,6 @@ class NotificationScheduler {
   // ---------------------------------------------------------------------------
 
   /// Parse a reminder_time string stored as "HH:MM" into a [TimeOfDay].
-  /// Exposed as a static method so it can be unit-tested directly.
   @visibleForTesting
   static TimeOfDay? parseTimeOfDay(String timeStr) {
     return _parseTimeOfDay(timeStr);

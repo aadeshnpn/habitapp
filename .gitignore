@@ -45,6 +45,12 @@ app.*.map.json
 # Local properties
 android/local.properties
 
+# Release signing (never commit)
+android/key.properties
+android/*.jks
+android/*.keystore
+.toolchain/
+
 # Firebase config — replace with real credentials before release
 # android/app/google-services.json
 

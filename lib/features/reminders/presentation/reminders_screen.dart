@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/notifications/notification_providers.dart';
+import '../../../core/notifications/notification_service.dart';
 import '../../../shared/widgets/app_nav_bar.dart';
 import '../data/interval_reminder_model.dart';
 import '../domain/interval_reminder_providers.dart';
@@ -59,6 +61,7 @@ class RemindersScreen extends ConsumerWidget {
           if (created == true) {
             ref.invalidate(activeIntervalRemindersProvider);
             ref.invalidate(reminderTodaySummaryProvider);
+            ref.invalidate(scheduleNotificationsProvider);
           }
         },
         icon: const Icon(Icons.alarm_add_outlined),
@@ -74,6 +77,7 @@ class RemindersScreen extends ConsumerWidget {
                 if (created == true) {
                   ref.invalidate(activeIntervalRemindersProvider);
                   ref.invalidate(reminderTodaySummaryProvider);
+                  ref.invalidate(scheduleNotificationsProvider);
                 }
               },
             );
@@ -83,6 +87,7 @@ class RemindersScreen extends ConsumerWidget {
             onRefresh: () async {
               ref.invalidate(activeIntervalRemindersProvider);
               ref.invalidate(reminderTodaySummaryProvider);
+              ref.invalidate(scheduleNotificationsProvider);
             },
             child: CustomScrollView(
               slivers: [
@@ -111,8 +116,11 @@ class RemindersScreen extends ConsumerWidget {
                           final repo =
                               ref.read(intervalReminderRepositoryProvider);
                           await repo.deleteReminder(reminder.id);
+                          await NotificationService.instance
+                              .cancelIntervalReminder(reminder.id);
                           ref.invalidate(activeIntervalRemindersProvider);
                           ref.invalidate(reminderTodaySummaryProvider);
+                          ref.invalidate(scheduleNotificationsProvider);
                         },
                         child: IntervalReminderCard(
                           reminder: reminder,
@@ -136,6 +144,7 @@ class RemindersScreen extends ConsumerWidget {
                             if (updated == true) {
                               ref.invalidate(activeIntervalRemindersProvider);
                               ref.invalidate(reminderTodaySummaryProvider);
+                              ref.invalidate(scheduleNotificationsProvider);
                             }
                           },
                         ),

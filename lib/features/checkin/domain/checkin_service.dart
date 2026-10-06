@@ -59,13 +59,13 @@ class CheckInService {
     final milestone =
         StreakCalculator.getMilestoneTier(updatedStreak.currentStreak);
 
-    // 5. Notify scheduler
+    // 5. Notify scheduler (stable IDs from habitId)
     await _scheduler.onCheckInCompleted(
-      habitIndex: habitIndex,
       habitId: habit.id,
       habitName: habit.name,
       habitIcon: habit.icon,
       updatedStreak: updatedStreak,
+      habitIndex: habitIndex,
     );
 
     return CheckInResult(

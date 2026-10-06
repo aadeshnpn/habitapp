@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/notifications/notification_providers.dart';
 import '../../../shared/widgets/emoji_picker_sheet.dart';
 import '../data/interval_reminder_model.dart';
 import '../domain/interval_reminder_providers.dart';
@@ -171,6 +172,7 @@ class _AddIntervalReminderSheetState
 
       ref.invalidate(activeIntervalRemindersProvider);
       ref.invalidate(reminderTodaySummaryProvider);
+      ref.invalidate(scheduleNotificationsProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {

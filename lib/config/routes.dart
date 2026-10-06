@@ -13,6 +13,7 @@ import '../features/settings/presentation/settings_screen.dart';
 import '../features/labels/presentation/labels_screen.dart';
 import '../features/labels/presentation/label_detail_screen.dart';
 import '../features/reminders/presentation/reminders_screen.dart';
+import '../features/mindfulness_bell/presentation/mindfulness_bell_screen.dart';
 
 // Named route constants
 class AppRoutes {
@@ -25,6 +26,7 @@ class AppRoutes {
   static const String editHabit = '/habit/:id/edit';
   static const String stats = '/stats';
   static const String settings = '/settings';
+  static const String mindfulness = '/mindfulness';
   static const String labels = '/labels';
   static const String labelDetail = '/labels/:id';
 }
@@ -97,6 +99,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/mindfulness',
+        name: 'mindfulness',
+        builder: (context, state) => const MindfulnessBellScreen(),
       ),
       GoRoute(
         path: '/labels',

@@ -7,12 +7,13 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 
+import 'notification_ids.dart';
+
 /// Abstract interface for scheduling notifications.
 /// Extracted so [NotificationScheduler] can be tested without real platform
 /// calls — pass a fake implementation in tests.
 abstract class NotificationServiceBase {
   Future<void> scheduleHabitReminder({
-    required int index,
     required String habitId,
     required String habitName,
     required String habitIcon,
@@ -21,14 +22,12 @@ abstract class NotificationServiceBase {
   });
 
   Future<void> scheduleStreakAtRiskAlert({
-    required int index,
     required String habitId,
     required String habitName,
     required int streak,
   });
 
   Future<void> scheduleStreakRepairReminder({
-    required int index,
     required String habitId,
     required String habitName,
     required int lostStreak,
@@ -40,20 +39,30 @@ abstract class NotificationServiceBase {
     required String habitIcon,
   });
 
-  Future<void> cancelHabitNotifications(int index);
+  Future<void> cancelHabitNotifications(String habitId);
   Future<void> cancelNotification(int id);
 
   /// Schedule all time-slot notifications for a single interval reminder
   /// within its active window.  Up to 20 slots per reminder.
   Future<void> scheduleIntervalReminder({
-    required int reminderIndex,
     required String reminderId,
     required String reminderName,
     required String reminderIcon,
     required List<String> slots, // list of "HH:MM" strings
   });
 
-  Future<void> cancelIntervalReminder(int reminderIndex);
+  Future<void> cancelIntervalReminder(String reminderId);
+
+  /// Schedule one-shot mindfulness bells at [whenList] using [soundId].
+  Future<void> scheduleMindfulnessBells({
+    required String soundId,
+    required List<tz.TZDateTime> whenList,
+  });
+
+  Future<void> cancelMindfulnessBells();
+
+  /// Fire an immediate mindfulness preview (sound + vibrate).
+  Future<void> previewMindfulnessBell(String soundId);
 
   /// Show a snooze notification [snoozeMinutes] from now.
   Future<void> scheduleSnooze({
@@ -75,20 +84,21 @@ class NotificationService extends NotificationServiceBase {
   static const _channelName = 'Habit Tracker';
   static const _channelDesc = 'Habit reminders and streak alerts';
 
-  // Notification ID ranges (avoids collisions):
-  // Daily reminders:     1000 + index
-  // Streak at-risk:      2000 + index
-  // Streak repair:       3000 + index
-  // Milestone celebrate: 4000 + index
-  // Interval reminders:  5000 + (reminderIndex * 20) + slotIndex
-  // Snooze:              9000 + (original id % 1000)
-
   static const _intervalChannelId = 'interval_reminders';
   static const _intervalChannelName = 'Interval Reminders';
   static const _intervalChannelDesc = 'Hydration, medication, movement reminders';
-  static const _maxSlotsPerReminder = 20;
+
+  static const mindfulnessSoundIds = [
+    'bowl',
+    'chime',
+    'soft_bell',
+    'wood',
+    'gong',
+  ];
 
   static void Function(String habitId)? onNotificationTap;
+
+  bool _exactAlarmsAllowed = true;
 
   // ---------------------------------------------------------------------------
   // Init
@@ -97,13 +107,8 @@ class NotificationService extends NotificationServiceBase {
   Future<void> initialize() async {
     if (kIsWeb) return;
     tz_data.initializeTimeZones();
-    // Set the local timezone so scheduled times match the device's clock.
-    try {
-      final localTz = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(localTz));
-    } catch (_) {
-      // Fallback if system timezone location cannot be resolved
-    }
+    await _configureLocalTimezone();
+
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidInit);
     await _plugin.initialize(
@@ -112,26 +117,66 @@ class NotificationService extends NotificationServiceBase {
     );
     await _createChannel();
     await _createIntervalChannel();
+    await _createMindfulnessChannels();
+    await _refreshExactAlarmCapability();
+  }
+
+  Future<void> _configureLocalTimezone() async {
+    try {
+      final localTz = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(localTz));
+      return;
+    } catch (e) {
+      debugPrint('Timezone resolve failed: $e');
+    }
+    debugPrint('Using UTC timezone fallback for notification schedules');
+    tz.setLocalLocation(tz.UTC);
   }
 
   Future<bool> requestPermission() async {
     if (kIsWeb) return false;
-    final android = _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-    return await android?.requestNotificationsPermission() ?? false;
+    final android = _androidPlugin;
+    final notifGranted =
+        await android?.requestNotificationsPermission() ?? false;
+    await android?.requestExactAlarmsPermission();
+    await _refreshExactAlarmCapability();
+    return notifGranted;
   }
+
+  Future<bool> canScheduleExactNotifications() async {
+    if (kIsWeb) return false;
+    await _refreshExactAlarmCapability();
+    return _exactAlarmsAllowed;
+  }
+
+  Future<void> _refreshExactAlarmCapability() async {
+    if (kIsWeb) {
+      _exactAlarmsAllowed = false;
+      return;
+    }
+    try {
+      final allowed = await _androidPlugin?.canScheduleExactNotifications();
+      // null (older API) → assume exact is available.
+      _exactAlarmsAllowed = allowed ?? true;
+    } catch (_) {
+      _exactAlarmsAllowed = true;
+    }
+  }
+
+  AndroidFlutterLocalNotificationsPlugin? get _androidPlugin => _plugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  AndroidScheduleMode get _scheduleMode => _exactAlarmsAllowed
+      ? AndroidScheduleMode.exactAllowWhileIdle
+      : AndroidScheduleMode.inexactAllowWhileIdle;
 
   // ---------------------------------------------------------------------------
   // Schedule: daily reminder
   // ---------------------------------------------------------------------------
 
-  /// Schedule a daily repeating notification at the given [time].
-  /// [index] is the habit's position in the list and determines the notification ID.
-  /// [habitId] is stored as payload for deep-linking on tap.
   @override
   Future<void> scheduleHabitReminder({
-    required int index,
     required String habitId,
     required String habitName,
     required String habitIcon,
@@ -139,9 +184,8 @@ class NotificationService extends NotificationServiceBase {
     bool alreadyCompletedToday = false,
   }) async {
     if (kIsWeb) return;
-    final notifId = 1000 + index;
+    final notifId = NotificationIds.daily(habitId);
 
-    // Cancel existing reminder before rescheduling.
     await _plugin.cancel(notifId);
 
     final messages = [
@@ -151,17 +195,16 @@ class NotificationService extends NotificationServiceBase {
     ];
     final body = messages[math.Random().nextInt(messages.length)];
 
-    final scheduledDate = _nextInstanceOfTime(time, alreadyCompletedToday: alreadyCompletedToday);
+    final scheduledDate =
+        _nextInstanceOfTime(time, alreadyCompletedToday: alreadyCompletedToday);
 
-    // exactAllowWhileIdle: fires reliably when screen is off and supports
-    // repeating schedules with matchDateTimeComponents.
     await _plugin.zonedSchedule(
       notifId,
       'Habit Reminder',
       body,
       scheduledDate,
       _notifDetails(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: _scheduleMode,
       matchDateTimeComponents: DateTimeComponents.time,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -175,13 +218,12 @@ class NotificationService extends NotificationServiceBase {
 
   @override
   Future<void> scheduleStreakAtRiskAlert({
-    required int index,
     required String habitId,
     required String habitName,
     required int streak,
   }) async {
     if (kIsWeb) return;
-    final notifId = 2000 + index;
+    final notifId = NotificationIds.atRisk(habitId);
     await _plugin.cancel(notifId);
 
     final messages = [
@@ -193,7 +235,6 @@ class NotificationService extends NotificationServiceBase {
 
     final scheduledDate = _todayAt(hour: 22, minute: 0);
 
-    // Only schedule if 10 pm is still in the future.
     if (scheduledDate.isAfter(tz.TZDateTime.now(tz.local))) {
       await _plugin.zonedSchedule(
         notifId,
@@ -201,7 +242,7 @@ class NotificationService extends NotificationServiceBase {
         body,
         scheduledDate,
         _notifDetails(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: _scheduleMode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: habitId,
@@ -215,13 +256,12 @@ class NotificationService extends NotificationServiceBase {
 
   @override
   Future<void> scheduleStreakRepairReminder({
-    required int index,
     required String habitId,
     required String habitName,
     required int lostStreak,
   }) async {
     if (kIsWeb) return;
-    final notifId = 3000 + index;
+    final notifId = NotificationIds.repair(habitId);
     await _plugin.cancel(notifId);
 
     final messages = [
@@ -239,7 +279,7 @@ class NotificationService extends NotificationServiceBase {
       body,
       scheduledDate,
       _notifDetails(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: _scheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: habitId,
@@ -264,8 +304,7 @@ class NotificationService extends NotificationServiceBase {
     ];
     final body = messages[math.Random().nextInt(messages.length)];
 
-    // Use a unique ID in the milestone range, derived from streak+name hash.
-    final notifId = 4000 + (streak ^ habitName.hashCode).abs() % 1000;
+    final notifId = NotificationIds.milestone(habitName, streak);
 
     await _plugin.show(
       notifId,
@@ -281,7 +320,6 @@ class NotificationService extends NotificationServiceBase {
 
   @override
   Future<void> scheduleIntervalReminder({
-    required int reminderIndex,
     required String reminderId,
     required String reminderName,
     required String reminderIcon,
@@ -289,18 +327,17 @@ class NotificationService extends NotificationServiceBase {
   }) async {
     if (kIsWeb) return;
 
-    // Cancel all existing slots for this reminder first.
-    await cancelIntervalReminder(reminderIndex);
+    await cancelIntervalReminder(reminderId);
 
     final limitedSlots =
-        slots.take(_maxSlotsPerReminder).toList();
+        slots.take(NotificationIds.maxSlotsPerReminder).toList();
 
     for (var i = 0; i < limitedSlots.length; i++) {
       final slotStr = limitedSlots[i];
       final tod = _parseTimeOfDay(slotStr);
       if (tod == null) continue;
 
-      final notifId = 5000 + (reminderIndex * _maxSlotsPerReminder) + i;
+      final notifId = NotificationIds.intervalSlot(reminderId, i);
 
       final messages = [
         '$reminderIcon Time for $reminderName!',
@@ -316,8 +353,8 @@ class NotificationService extends NotificationServiceBase {
         reminderName,
         body,
         scheduled,
-        _intervalNotifDetails(notifId: notifId, payload: reminderId),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        _intervalNotifDetails(),
+        androidScheduleMode: _scheduleMode,
         matchDateTimeComponents: DateTimeComponents.time,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
@@ -327,17 +364,73 @@ class NotificationService extends NotificationServiceBase {
   }
 
   @override
-  Future<void> cancelIntervalReminder(int reminderIndex) async {
+  Future<void> cancelIntervalReminder(String reminderId) async {
     if (kIsWeb) return;
     final futures = List.generate(
-      _maxSlotsPerReminder,
-      (i) => _plugin.cancel(5000 + (reminderIndex * _maxSlotsPerReminder) + i),
+      NotificationIds.maxSlotsPerReminder,
+      (i) => _plugin.cancel(NotificationIds.intervalSlot(reminderId, i)),
     );
     await Future.wait(futures);
   }
 
   // ---------------------------------------------------------------------------
-  // Snooze: reschedule a single notification N minutes from now
+  // Mindfulness bell
+  // ---------------------------------------------------------------------------
+
+  @override
+  Future<void> scheduleMindfulnessBells({
+    required String soundId,
+    required List<tz.TZDateTime> whenList,
+  }) async {
+    if (kIsWeb) return;
+    await cancelMindfulnessBells();
+
+    final sound = _normalizeSoundId(soundId);
+    final limited = whenList.take(NotificationIds.maxMindfulnessSlots).toList();
+    final now = tz.TZDateTime.now(tz.local);
+
+    for (var i = 0; i < limited.length; i++) {
+      final when = limited[i];
+      if (!when.isAfter(now)) continue;
+      final notifId = NotificationIds.mindfulness(i);
+      await _plugin.zonedSchedule(
+        notifId,
+        'Mindfulness',
+        '',
+        when,
+        _mindfulnessNotifDetails(sound),
+        androidScheduleMode: _scheduleMode,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'mindfulness',
+      );
+    }
+  }
+
+  @override
+  Future<void> cancelMindfulnessBells() async {
+    if (kIsWeb) return;
+    final futures = List.generate(
+      NotificationIds.maxMindfulnessSlots,
+      (i) => _plugin.cancel(NotificationIds.mindfulness(i)),
+    );
+    await Future.wait(futures);
+  }
+
+  @override
+  Future<void> previewMindfulnessBell(String soundId) async {
+    if (kIsWeb) return;
+    final sound = _normalizeSoundId(soundId);
+    await _plugin.show(
+      6999,
+      'Mindfulness',
+      '',
+      _mindfulnessNotifDetails(sound),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Snooze
   // ---------------------------------------------------------------------------
 
   @override
@@ -350,7 +443,7 @@ class NotificationService extends NotificationServiceBase {
   }) async {
     if (kIsWeb) return;
 
-    final snoozeId = 9000 + (originalNotifId % 1000);
+    final snoozeId = NotificationIds.snooze(originalNotifId);
     await _plugin.cancel(snoozeId);
 
     final snoozeTime =
@@ -362,7 +455,7 @@ class NotificationService extends NotificationServiceBase {
       '$habitIcon Reminder — snoozed for $snoozeMinutes minutes.',
       snoozeTime,
       _notifDetails(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: _scheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: habitId,
@@ -374,12 +467,12 @@ class NotificationService extends NotificationServiceBase {
   // ---------------------------------------------------------------------------
 
   @override
-  Future<void> cancelHabitNotifications(int index) async {
+  Future<void> cancelHabitNotifications(String habitId) async {
     if (kIsWeb) return;
     await Future.wait([
-      _plugin.cancel(1000 + index),
-      _plugin.cancel(2000 + index),
-      _plugin.cancel(3000 + index),
+      _plugin.cancel(NotificationIds.daily(habitId)),
+      _plugin.cancel(NotificationIds.atRisk(habitId)),
+      _plugin.cancel(NotificationIds.repair(habitId)),
     ]);
   }
 
@@ -400,10 +493,7 @@ class NotificationService extends NotificationServiceBase {
       description: _channelDesc,
       importance: Importance.high,
     );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    await _androidPlugin?.createNotificationChannel(channel);
   }
 
   Future<void> _createIntervalChannel() async {
@@ -413,10 +503,44 @@ class NotificationService extends NotificationServiceBase {
       description: _intervalChannelDesc,
       importance: Importance.defaultImportance,
     );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    await _androidPlugin?.createNotificationChannel(channel);
+  }
+
+  Future<void> _createMindfulnessChannels() async {
+    for (final sound in mindfulnessSoundIds) {
+      final channel = AndroidNotificationChannel(
+        'mindfulness_bell_$sound',
+        'Mindfulness Bell (${_soundLabel(sound)})',
+        description: 'Mindfulness bell sound and vibration',
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound(sound),
+        enableVibration: true,
+      );
+      await _androidPlugin?.createNotificationChannel(channel);
+    }
+  }
+
+  static String _soundLabel(String soundId) {
+    switch (soundId) {
+      case 'bowl':
+        return 'Bowl';
+      case 'chime':
+        return 'Chime';
+      case 'soft_bell':
+        return 'Soft Bell';
+      case 'wood':
+        return 'Wood';
+      case 'gong':
+        return 'Gong';
+      default:
+        return soundId;
+    }
+  }
+
+  static String _normalizeSoundId(String soundId) {
+    if (mindfulnessSoundIds.contains(soundId)) return soundId;
+    return 'bowl';
   }
 
   NotificationDetails _notifDetails() {
@@ -440,10 +564,7 @@ class NotificationService extends NotificationServiceBase {
     );
   }
 
-  NotificationDetails _intervalNotifDetails({
-    required int notifId,
-    required String payload,
-  }) {
+  NotificationDetails _intervalNotifDetails() {
     return const NotificationDetails(
       android: AndroidNotificationDetails(
         _intervalChannelId,
@@ -470,10 +591,28 @@ class NotificationService extends NotificationServiceBase {
     );
   }
 
-  /// Returns a [tz.TZDateTime] for the next occurrence of [time] (today if
-  /// still in the future, tomorrow otherwise). If [alreadyCompletedToday] is true,
-  /// it will schedule for tomorrow even if the time hasn't passed today.
-  tz.TZDateTime _nextInstanceOfTime(TimeOfDay time, {bool alreadyCompletedToday = false}) {
+  NotificationDetails _mindfulnessNotifDetails(String soundId) {
+    final channelId = 'mindfulness_bell_$soundId';
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        'Mindfulness Bell (${_soundLabel(soundId)})',
+        channelDescription: 'Mindfulness bell sound and vibration',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound(soundId),
+        enableVibration: true,
+        autoCancel: true,
+        category: AndroidNotificationCategory.reminder,
+        // Sound/vibrate only — no actions.
+      ),
+    );
+  }
+
+  tz.TZDateTime _nextInstanceOfTime(TimeOfDay time,
+      {bool alreadyCompletedToday = false}) {
     final now = tz.TZDateTime.now(tz.local);
     tz.TZDateTime scheduled = tz.TZDateTime(
       tz.local,
@@ -489,20 +628,17 @@ class NotificationService extends NotificationServiceBase {
     return scheduled;
   }
 
-  /// Returns a [tz.TZDateTime] for today at [hour]:[minute].
   tz.TZDateTime _todayAt({required int hour, required int minute}) {
     final now = tz.TZDateTime.now(tz.local);
     return tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
   }
 
-  /// Returns a [tz.TZDateTime] for tomorrow at [hour]:[minute].
   tz.TZDateTime _tomorrowAt({required int hour, required int minute}) {
     final now = tz.TZDateTime.now(tz.local);
     return tz.TZDateTime(
         tz.local, now.year, now.month, now.day + 1, hour, minute);
   }
 
-  // Parse "HH:MM" helper — also used by interval scheduler
   static TimeOfDay? _parseTimeOfDay(String timeStr) {
     final parts = timeStr.split(':');
     if (parts.length != 2) return null;
@@ -515,18 +651,17 @@ class NotificationService extends NotificationServiceBase {
 
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
-    if (payload != null && payload.isNotEmpty) {
-      // Handle snooze action
-      if (response.actionId == 'snooze') {
-        scheduleSnooze(
-          originalNotifId: response.id ?? 0,
-          habitId: payload,
-          habitName: 'Reminder',
-          habitIcon: '⏰',
-        );
-        return;
-      }
-      onNotificationTap?.call(payload);
+    if (payload == null || payload.isEmpty) return;
+    if (payload == 'mindfulness') return;
+    if (response.actionId == 'snooze') {
+      scheduleSnooze(
+        originalNotifId: response.id ?? 0,
+        habitId: payload,
+        habitName: 'Reminder',
+        habitIcon: '⏰',
+      );
+      return;
     }
+    onNotificationTap?.call(payload);
   }
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/notifications/notification_providers.dart';
+
 // ---------------------------------------------------------------------------
 // State provider backed by SharedPreferences
 // ---------------------------------------------------------------------------
@@ -129,5 +131,7 @@ class _NotificationSettingsSectionState
     await prefs.setBool(key, value);
     // Invalidate the provider so any other listener picks up the new value.
     ref.invalidate(_notifPrefsProvider);
+    // Reschedule OS notifications to match the new toggles.
+    ref.invalidate(scheduleNotificationsProvider);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../features/habits/domain/layout_preference_provider.dart';
 import '../../../shared/theme/app_palette.dart';
 import '../../../shared/theme/theme_provider.dart';
@@ -134,6 +135,22 @@ class SettingsScreen extends ConsumerWidget {
           // Section: Notifications
           // ----------------------------------------------------------------
           const NotificationSettingsSection(),
+
+          const Divider(height: 1),
+
+          // ----------------------------------------------------------------
+          // Section: Mindfulness Bell
+          // ----------------------------------------------------------------
+          const _SectionHeader(title: 'Mindfulness'),
+          ListTile(
+            leading: const Icon(Icons.self_improvement_outlined),
+            title: const Text('Mindfulness Bell'),
+            subtitle: const Text(
+              'Gentle bells on a schedule with random timing',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/mindfulness'),
+          ),
 
           const Divider(height: 1),
 
