@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'app.dart';
+import 'core/notifications/notification_service.dart';
+import 'core/background/background_sync_manager.dart';
+import 'firebase_options.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,12 +18,23 @@ void main() async {
     databaseFactory = databaseFactoryFfiWebNoWebWorker;
   }
 
-  // Initialize Firebase — requires valid google-services.json
+  // Web needs explicit options; Android reads from google-services.json automatically.
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: kIsWeb ? DefaultFirebaseOptions.web : null,
+    );
   } catch (e) {
-    debugPrint(
-        'Firebase init failed (expected if google-services.json is placeholder): $e');
+    debugPrint('Firebase initializeApp notice: $e');
   }
+
+
+  // Initialize notifications, background Garmin AI sync, and request permission on Android.
+  if (!kIsWeb) {
+    await NotificationService.instance.initialize();
+    await NotificationService.instance.requestPermission();
+    await BackgroundSyncManager.initialize();
+  }
+
+
   runApp(const ProviderScope(child: HabitTrackerApp()));
 }

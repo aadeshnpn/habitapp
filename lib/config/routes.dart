@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/habits/presentation/home_screen.dart';
+import '../features/habits/presentation/synced_activities_screen.dart';
 import '../features/habits/presentation/habit_detail_screen.dart';
 import '../features/habits/presentation/add_habit_screen.dart';
 import '../features/habits/presentation/edit_habit_screen.dart';
@@ -11,11 +12,14 @@ import '../features/stats/presentation/stats_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/labels/presentation/labels_screen.dart';
 import '../features/labels/presentation/label_detail_screen.dart';
+import '../features/reminders/presentation/reminders_screen.dart';
 
 // Named route constants
 class AppRoutes {
   static const String onboarding = '/onboarding';
   static const String home = '/home';
+  static const String reminders = '/reminders';
+  static const String synced = '/synced';
   static const String habitDetail = '/habit/:id';
   static const String addHabit = '/habit/add';
   static const String editHabit = '/habit/:id/edit';
@@ -30,10 +34,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/home',
     debugLogDiagnostics: true,
     redirect: (context, state) async {
-      final prefs = await SharedPreferences.getInstance();
-      final done = prefs.getBool('onboarding_complete') ?? false;
-      if (!done && state.uri.path != '/onboarding') return '/onboarding';
-      if (done && state.uri.path == '/onboarding') return '/home';
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final done = prefs.getBool('onboarding_complete') ?? false;
+        if (!done && state.uri.path != '/onboarding') return '/onboarding';
+        if (done && state.uri.path == '/onboarding') return '/home';
+      } catch (_) {
+        // SharedPreferences failure — allow navigation to proceed.
+      }
       return null;
     },
     routes: [
@@ -46,6 +54,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/home',
         name: 'home',
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/reminders',
+        name: 'reminders',
+        builder: (context, state) => const RemindersScreen(),
+      ),
+      GoRoute(
+        path: '/synced',
+        name: 'synced',
+        builder: (context, state) => const SyncedActivitiesScreen(),
       ),
       GoRoute(
         path: '/habit/add',

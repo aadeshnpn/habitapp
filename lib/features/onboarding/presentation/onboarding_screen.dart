@@ -41,8 +41,6 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _pageController = PageController();
-  int _currentPage = 0;
-
   // Habit creation state (pages 2 onwards)
   String _selectedEmoji = _kEmojis.first;
   Color _selectedColor = _kColorOptions.first;
@@ -68,7 +66,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOutCubic,
     );
-    setState(() => _currentPage = page);
+    // Page tracking not needed beyond pageController; setState removed.
   }
 
   Future<void> _completeFirstCheckIn() async {
@@ -116,7 +114,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await NotificationService.instance.requestPermission();
 
     // 5. Mark onboarding complete and navigate to /home
-    await markOnboardingComplete();
+    try {
+      await markOnboardingComplete();
+    } catch (_) {
+      // If prefs fail, proceed anyway — user shouldn't be stuck.
+    }
     if (mounted) context.go('/home');
   }
 

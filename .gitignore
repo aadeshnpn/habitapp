@@ -47,3 +47,15 @@ android/local.properties
 
 # Firebase config — replace with real credentials before release
 # android/app/google-services.json
+
+# Service-account credentials (private keys)
+creds/
+
+# Android/Gradle build cache
+android/.gradle/
+
+# Firebase CLI local cache
+.firebase/
+
+# Local agent settings
+.claude/

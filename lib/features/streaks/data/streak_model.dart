@@ -65,7 +65,7 @@ class StreakData {
       'best_streak': bestStreak,
       'total_check_ins': totalCheckIns,
       'state': state.name,
-      'last_check_in': lastCheckIn?.toIso8601String(),
+      'last_check_in': lastCheckIn?.toUtc().toIso8601String(),
       'freeze_tokens': freezeTokens,
     };
   }
@@ -78,7 +78,7 @@ class StreakData {
       totalCheckIns: map['total_check_ins'] as int? ?? 0,
       state: StreakState.values.byName(map['state'] as String? ?? 'active'),
       lastCheckIn: map['last_check_in'] != null
-          ? DateTime.parse(map['last_check_in'] as String)
+          ? DateTime.parse(map['last_check_in'] as String).toLocal()
           : null,
       freezeTokens: map['freeze_tokens'] as int? ?? 0,
     );

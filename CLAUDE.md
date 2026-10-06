@@ -8,6 +8,11 @@ Flutter Android habit tracking app (`habit_tracker`). Tracks daily habits and st
 
 ## Commands
 
+Flutter SDK is at `/home/aadeshnpn/Downloads/flutter/bin/flutter`. Add to PATH or prefix commands:
+```bash
+export PATH="$PATH:/home/aadeshnpn/Downloads/flutter/bin"
+```
+
 ```bash
 # Install dependencies
 flutter pub get
@@ -34,7 +39,7 @@ flutter analyze
 dart run build_runner build --delete-conflicting-outputs
 ```
 
-> Flutter SDK is required. If not in PATH, find it with `find /home -name "flutter" -type f 2>/dev/null`.
+> Flutter SDK: `/home/aadeshnpn/Downloads/flutter/bin/flutter`
 
 ## Architecture
 

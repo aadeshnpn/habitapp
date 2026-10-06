@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../database/database_service.dart';
 import '../../features/habits/domain/habit_providers.dart';
 import 'auth_service.dart';
 import 'sync_service.dart';

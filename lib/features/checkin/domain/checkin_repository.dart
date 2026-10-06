@@ -29,7 +29,14 @@ class CheckInRepository {
     await _checkInDao.insert(checkIn);
 
     // Update streak counters.
-    final existing = await _streakDao.getForHabit(habitId);
+    // Auto-init a zero streak row if none exists yet (e.g. habit was synced
+    // from Firestore without an accompanying streak_data row).  Without this
+    // guard the getForHabit call below returns null and the streak is silently
+    // dropped — the bug.
+    final existing = await _streakDao.getForHabit(habitId) ??
+        await _streakDao
+            .initForHabit(habitId)
+            .then((_) => _streakDao.getForHabit(habitId));
     if (existing != null) {
       final updated = _applyCheckIn(existing, checkIn.timestamp);
       await _streakDao.upsert(updated);
@@ -46,6 +53,10 @@ class CheckInRepository {
   Future<bool> isCompletedToday(String habitId) async {
     final checkIn = await _checkInDao.getTodayForHabit(habitId);
     return checkIn != null;
+  }
+
+  Future<CheckIn?> getTodayCheckIn(String habitId) async {
+    return _checkInDao.getTodayForHabit(habitId);
   }
 
   Future<Map<DateTime, bool>> getCompletionMap(

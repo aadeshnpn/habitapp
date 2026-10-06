@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:habit_tracker/features/checkin/data/checkin_model.dart';
 import 'package:habit_tracker/features/habits/data/habit_model.dart';
 import 'package:habit_tracker/shared/widgets/empty_state.dart';
 import 'package:habit_tracker/shared/widgets/habit_icon_grid_item.dart';
 
 class IconGridLayout extends StatelessWidget {
   final List<Habit> habits;
-  final Set<String> completedToday;
+  final Map<String, CheckIn> completedToday;
   final Map<String, int> streakCounts;
   final Set<String> atRiskHabits;
   final Function(String habitId) onComplete;
@@ -33,8 +34,8 @@ class IconGridLayout extends StatelessWidget {
 
     // Incomplete first, completed last.
     final sorted = [...habits]..sort((a, b) {
-        final aComplete = completedToday.contains(a.id) ? 1 : 0;
-        final bComplete = completedToday.contains(b.id) ? 1 : 0;
+        final aComplete = completedToday.containsKey(a.id) ? 1 : 0;
+        final bComplete = completedToday.containsKey(b.id) ? 1 : 0;
         return aComplete.compareTo(bComplete);
       });
 
@@ -49,7 +50,7 @@ class IconGridLayout extends StatelessWidget {
       itemCount: sorted.length,
       itemBuilder: (context, index) {
         final habit = sorted[index];
-        final isCompleted = completedToday.contains(habit.id);
+        final isCompleted = completedToday.containsKey(habit.id);
         final streak = streakCounts[habit.id] ?? 0;
 
         return HabitIconGridItem(

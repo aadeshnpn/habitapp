@@ -70,6 +70,7 @@ class HabitRepository {
     return habit;
   }
 
+
   Future<void> updateHabit(Habit habit) async {
     await _habitDao.update(habit);
   }

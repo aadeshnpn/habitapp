@@ -150,9 +150,12 @@ class _TimesPerWeekPicker extends StatelessWidget {
 
     return Row(
       children: [
-        Text(
-          'Times per week:',
-          style: theme.textTheme.bodyMedium,
+        Flexible(
+          child: Text(
+            'Times per week:',
+            style: theme.textTheme.bodyMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         const SizedBox(width: 16),
         IconButton(

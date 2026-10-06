@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 /// Shared bottom navigation bar used on all top-level screens.
-/// [currentIndex]: 0=Today, 1=Stats, 2=Labels, 3=Settings
+/// [currentIndex]: 0=Today, 1=Reminders, 2=Synced, 3=Stats, 4=Labels, 5=Settings
 class AppNavBar extends StatelessWidget {
   final int currentIndex;
 
@@ -17,6 +17,16 @@ class AppNavBar extends StatelessWidget {
           icon: Icon(Icons.home_outlined),
           selectedIcon: Icon(Icons.home),
           label: 'Today',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.alarm_outlined),
+          selectedIcon: Icon(Icons.alarm),
+          label: 'Reminders',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.sync_outlined),
+          selectedIcon: Icon(Icons.sync),
+          label: 'Synced',
         ),
         NavigationDestination(
           icon: Icon(Icons.bar_chart_outlined),
@@ -40,10 +50,14 @@ class AppNavBar extends StatelessWidget {
           case 0:
             context.go('/home');
           case 1:
-            context.go('/stats');
+            context.go('/reminders');
           case 2:
-            context.go('/labels');
+            context.go('/synced');
           case 3:
+            context.go('/stats');
+          case 4:
+            context.go('/labels');
+          case 5:
             context.go('/settings');
         }
       },

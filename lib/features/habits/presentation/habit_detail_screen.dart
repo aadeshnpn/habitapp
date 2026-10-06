@@ -94,7 +94,13 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
       final habitRepo = ref.read(habitRepositoryProvider);
       await habitRepo.archiveHabit(widget.habitId);
       ref.invalidate(activeHabitsProvider);
-      if (mounted) context.pop();
+      if (mounted) {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/home');
+        }
+      }
     }
   }
 
@@ -261,6 +267,17 @@ class _HabitSliverAppBar extends StatelessWidget {
     return SliverAppBar(
       pinned: true,
       expandedHeight: 140,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: 'Back',
+        onPressed: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home');
+          }
+        },
+      ),
       flexibleSpace: FlexibleSpaceBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -342,7 +359,6 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Row(
       children: [
         _StatCard(
@@ -467,16 +483,21 @@ class _CheckInTile extends StatelessWidget {
     final theme = Theme.of(context);
 
     String? subtitle;
-    if (checkInType == CheckInType.note && checkIn.note != null) {
-      subtitle = checkIn.note;
-    } else if (checkInType == CheckInType.quantity &&
-        checkIn.quantity != null) {
+    final noteText = checkIn.note;
+    if (checkInType == CheckInType.quantity && checkIn.quantity != null) {
       final unit = quantityUnit ?? '';
       final qty = checkIn.quantity!;
       final qtyStr = qty == qty.truncateToDouble()
           ? qty.toInt().toString()
           : qty.toStringAsFixed(1);
-      subtitle = '$qtyStr $unit'.trim();
+      final qtyText = '$qtyStr $unit'.trim();
+      if (noteText != null && noteText.isNotEmpty) {
+        subtitle = '$qtyText • $noteText';
+      } else {
+        subtitle = qtyText;
+      }
+    } else if (noteText != null && noteText.isNotEmpty) {
+      subtitle = noteText;
     }
 
     return Container(

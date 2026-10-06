@@ -2,19 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/notifications/notification_providers.dart';
+import '../../../shared/widgets/emoji_picker_sheet.dart';
 import '../data/habit_model.dart';
 import '../domain/habit_providers.dart';
 import '../../labels/domain/label_providers.dart';
 import '../../labels/presentation/widgets/label_chip_selector.dart';
 import 'widgets/frequency_selector.dart';
 import 'widgets/checkin_type_selector.dart';
-
-const _kEditEmojis = [
-  '🏃', '🏋️', '🧘', '💧', '📚', '✍️', '🎸', '🍎',
-  '😴', '🧹', '💊', '🚴', '🏊', '🧠', '🎯', '💪',
-  '🌅', '🫁', '🍵', '🚶', '📝', '🎨', '🌿', '💻',
-  '🎵', '🤸', '🥗', '🛌', '🎮', '🐕',
-];
 
 const _kEditColorOptions = [
   Colors.green,
@@ -41,7 +36,7 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
   bool _loaded = false;
   bool _isSaving = false;
 
-  String _selectedEmoji = _kEditEmojis.first;
+  String _selectedEmoji = EmojiPickerSheet.defaultSuggestions.first;
   Color _selectedColor = _kEditColorOptions.first;
   FrequencyType _frequencyType = FrequencyType.daily;
   List<int> _selectedDays = [];
@@ -116,7 +111,7 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => _EditEmojiPickerSheet(currentEmoji: _selectedEmoji),
+      builder: (_) => EmojiPickerSheet(currentEmoji: _selectedEmoji),
     );
     if (picked != null) setState(() => _selectedEmoji = picked);
   }
@@ -160,13 +155,25 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
             _checkInType == CheckInType.quantity ? _quantityUnit : null,
         reminderTime: _formatReminderTime(),
       );
+
       final repo = ref.read(habitRepositoryProvider);
       await repo.updateHabit(updated);
       final labelRepo = ref.read(labelRepositoryProvider);
       await labelRepo.setHabitLabels(updated.id, _selectedLabelIds);
       ref.invalidate(activeHabitsProvider);
+      ref.invalidate(scheduleNotificationsProvider);
       ref.invalidate(allLabelsProvider);
-      if (mounted) context.pop();
+      // Invalidate all label-family providers so label detail screens refresh.
+      ref.invalidate(labelStreakProvider);
+      ref.invalidate(labelCompletionMapProvider);
+      ref.invalidate(labelHabitIdsProvider);
+      if (mounted) {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/home');
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -285,6 +292,8 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+
 
             // Labels
             _EditSectionCard(
@@ -507,94 +516,3 @@ class _EditSectionCard extends StatelessWidget {
   }
 }
 
-class _EditEmojiPickerSheet extends StatefulWidget {
-  final String currentEmoji;
-
-  const _EditEmojiPickerSheet({required this.currentEmoji});
-
-  @override
-  State<_EditEmojiPickerSheet> createState() => _EditEmojiPickerSheetState();
-}
-
-class _EditEmojiPickerSheetState extends State<_EditEmojiPickerSheet> {
-  late String _highlighted;
-
-  @override
-  void initState() {
-    super.initState();
-    _highlighted = widget.currentEmoji;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color:
-                    theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Text(
-              'Choose an icon',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 16),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 6,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1,
-              ),
-              itemCount: _kEditEmojis.length,
-              itemBuilder: (_, i) {
-                final emoji = _kEditEmojis[i];
-                final isSelected = emoji == _highlighted;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _highlighted = emoji);
-                    Navigator.of(context).pop(emoji);
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? theme.colorScheme.primary.withOpacity(0.15)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? theme.colorScheme.primary
-                            : Colors.transparent,
-                        width: 1.5,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      emoji,
-                      style: const TextStyle(fontSize: 28),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

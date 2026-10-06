@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:habit_tracker/features/checkin/data/checkin_model.dart';
 import 'package:habit_tracker/features/habits/data/habit_model.dart';
 import 'package:habit_tracker/shared/widgets/empty_state.dart';
 import 'package:habit_tracker/shared/widgets/habit_card.dart';
 
 class CardListLayout extends StatelessWidget {
   final List<Habit> habits;
-  final Set<String> completedToday;
+  final Map<String, CheckIn> completedToday;
   final Map<String, int> streakCounts;
   final Set<String> atRiskHabits;
   final Function(String habitId) onComplete;
@@ -33,8 +34,8 @@ class CardListLayout extends StatelessWidget {
 
     // Incomplete first, completed last.
     final sorted = [...habits]..sort((a, b) {
-        final aComplete = completedToday.contains(a.id) ? 1 : 0;
-        final bComplete = completedToday.contains(b.id) ? 1 : 0;
+        final aComplete = completedToday.containsKey(a.id) ? 1 : 0;
+        final bComplete = completedToday.containsKey(b.id) ? 1 : 0;
         return aComplete.compareTo(bComplete);
       });
 
@@ -43,7 +44,9 @@ class CardListLayout extends StatelessWidget {
       itemCount: sorted.length,
       itemBuilder: (context, index) {
         final habit = sorted[index];
-        final isCompleted = completedToday.contains(habit.id);
+        final isCompleted = completedToday.containsKey(habit.id);
+        final checkIn = completedToday[habit.id];
+        final isAutoLogged = checkIn?.note?.contains('Auto-synced') == true || checkIn?.note?.contains('Linked to Health Activity') == true;
         final streak = streakCounts[habit.id] ?? 0;
         final isAtRisk = atRiskHabits.contains(habit.id);
 
@@ -56,6 +59,7 @@ class CardListLayout extends StatelessWidget {
             icon: habit.icon,
             streakCount: streak,
             isCompleted: isCompleted,
+            isAutoLogged: isAutoLogged,
             isAtRisk: isAtRisk,
             accentColor: Color(habit.color),
             onTap: () => onComplete(habit.id),

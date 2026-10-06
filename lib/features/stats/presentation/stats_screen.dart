@@ -18,15 +18,13 @@ class StatsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your Stats'),
         centerTitle: false,
         elevation: 0,
       ),
-      bottomNavigationBar: const AppNavBar(currentIndex: 1),
+      bottomNavigationBar: const AppNavBar(currentIndex: 3),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(overallCompletionRateProvider);
@@ -63,11 +61,10 @@ class _SummarySection extends ConsumerWidget {
     final habitsAsync = ref.watch(activeHabitsProvider);
 
     return SizedBox(
-      height: 110,
+      height: 120,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          // Overall completion rate
           overallAsync.when(
             data: (rate) => _SummaryCard(
               accentColor: AppColors.greenPrimary,
@@ -84,7 +81,6 @@ class _SummarySection extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // Best current streak
           streakAsync.when(
             data: (streak) => _SummaryCard(
               accentColor: AppColors.orangePrimary,
@@ -101,7 +97,6 @@ class _SummarySection extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // Total active habits
           habitsAsync.when(
             data: (habits) => _SummaryCard(
               accentColor: AppColors.purplePrimary,
@@ -202,39 +197,117 @@ class _SummaryCardSkeleton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Insights section
+// Insights section — first 3 visible, rest behind "Show more"
 // ---------------------------------------------------------------------------
 
-class _InsightsSection extends ConsumerWidget {
+const _kInsightsPreviewCount = 3;
+
+class _InsightsSection extends ConsumerStatefulWidget {
   const _InsightsSection();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_InsightsSection> createState() => _InsightsSectionState();
+}
+
+class _InsightsSectionState extends ConsumerState<_InsightsSection> {
+  bool _expanded = false;
+  final Set<String> _dismissedKeys = {};
+
+  static String _keyFor(InsightCard card) =>
+      '${card.type.name}|${card.title}|${card.subtitle}';
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final insightsAsync = ref.watch(insightCardsProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Insights',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        // Section header
+        Row(
+          children: [
+            Text(
+              'Insights',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            insightsAsync.when(
+              data: (insights) {
+                final remaining = insights
+                    .where((c) => !_dismissedKeys.contains(_keyFor(c)))
+                    .toList();
+                if (remaining.length <= _kInsightsPreviewCount) {
+                  return const SizedBox.shrink();
+                }
+                return _SectionPill(
+                  label: _expanded
+                      ? 'Show less'
+                      : '+${remaining.length - _kInsightsPreviewCount} more',
+                  onTap: () => setState(() => _expanded = !_expanded),
+                );
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         insightsAsync.when(
-          data: (insights) {
-            if (insights.isEmpty) {
-              return _InsightsEmptyState();
-            }
+          data: (allInsights) {
+            final insights = allInsights
+                .where((c) => !_dismissedKeys.contains(_keyFor(c)))
+                .toList();
+
+            if (insights.isEmpty) return _InsightsEmptyState();
+
+            // Always the first N cards — never overlaps with the overflow block.
+            final visible = insights.length > _kInsightsPreviewCount
+                ? insights.sublist(0, _kInsightsPreviewCount)
+                : insights;
+
+            Widget dismissible(InsightCard card) => Dismissible(
+                  key: ValueKey(_keyFor(card)),
+                  direction: DismissDirection.startToEnd,
+                  onDismissed: (_) =>
+                      setState(() => _dismissedKeys.add(_keyFor(card))),
+                  background: _DismissBackground(),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _InsightCardWidget(card: card),
+                  ),
+                );
+
             return Column(
-              children: insights
-                  .map((card) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _InsightCardWidget(card: card),
-                      ))
-                  .toList(),
+              children: [
+                // Always-visible cards
+                ...visible.map(dismissible),
+                // Animated overflow cards
+                if (insights.length > _kInsightsPreviewCount)
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: _expanded
+                        ? Column(
+                            children: insights
+                                .sublist(_kInsightsPreviewCount)
+                                .map(dismissible)
+                                .toList(),
+                          )
+                        : const SizedBox(width: double.infinity),
+                  ),
+                // Collapse button shown at bottom when fully expanded
+                if (_expanded && insights.length > _kInsightsPreviewCount)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: _ShowLessButton(
+                      onTap: () => setState(() => _expanded = false),
+                    ),
+                  ),
+              ],
             );
           },
           loading: () => const Center(
@@ -373,6 +446,8 @@ class _InsightCardWidget extends StatelessWidget {
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
@@ -381,7 +456,7 @@ class _InsightCardWidget extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Habit breakdown section
+// Habit breakdown section — each card individually expandable
 // ---------------------------------------------------------------------------
 
 class _HabitBreakdownSection extends ConsumerWidget {
@@ -395,10 +470,30 @@ class _HabitBreakdownSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Section header with habit count badge
+        Row(
+          children: [
+            Text(
+              'Habit Breakdown',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 8),
+            habitsAsync.when(
+              data: (habits) => habits.isEmpty
+                  ? const SizedBox.shrink()
+                  : _CountBadge(count: habits.length),
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
         Text(
-          'Habit Breakdown',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
+          'Tap a habit to see detailed stats',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 12),
@@ -415,8 +510,8 @@ class _HabitBreakdownSection extends ConsumerWidget {
             return Column(
               children: habits
                   .map((habit) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _HabitBreakdownRow(habit: habit),
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _HabitBreakdownCard(habit: habit),
                       ))
                   .toList(),
             );
@@ -438,116 +533,369 @@ class _HabitBreakdownSection extends ConsumerWidget {
   }
 }
 
-class _HabitBreakdownRow extends ConsumerWidget {
+class _HabitBreakdownCard extends ConsumerStatefulWidget {
   final Habit habit;
 
-  const _HabitBreakdownRow({required this.habit});
+  const _HabitBreakdownCard({required this.habit});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HabitBreakdownCard> createState() =>
+      _HabitBreakdownCardState();
+}
+
+class _HabitBreakdownCardState extends ConsumerState<_HabitBreakdownCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final rateAsync = ref.watch(habitCompletionRateProvider(habit.id));
-    final dowAsync = ref.watch(dayOfWeekBreakdownProvider(habit.id));
+    final rateAsync = ref.watch(habitCompletionRateProvider(widget.habit.id));
+    final dowAsync = ref.watch(dayOfWeekBreakdownProvider(widget.habit.id));
+    final habitColor = Color(widget.habit.color);
 
-    final habitColor = Color(habit.color);
-
-    return GestureDetector(
-      onTap: () => context.push('/habit/${habit.id}'),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.cardDark : AppColors.cardLight,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row: icon + name + completion label
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: habitColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : AppColors.cardLight,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Compact header row (always visible) ──
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: _expanded
+                ? const BorderRadius.vertical(top: Radius.circular(14))
+                : BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+              child: Row(
+                children: [
+                  // Icon
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: habitColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        widget.habit.icon,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
                   ),
-                  child: Center(
+                  const SizedBox(width: 10),
+                  // Name
+                  Expanded(
                     child: Text(
-                      habit.icon,
-                      style: const TextStyle(fontSize: 18),
+                      widget.habit.name,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    habit.name,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 6),
+                  // Completion % pill
+                  rateAsync.when(
+                    data: (rate) => _RatePill(rate: rate, color: habitColor),
+                    loading: () => const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 1.5),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    error: (_, __) => const SizedBox.shrink(),
                   ),
-                ),
-                rateAsync.when(
-                  data: (rate) => Text(
-                    '${(rate * 100).round()}% this month',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: habitColor,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 4),
+                  // Expand / collapse chevron
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 220),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  loading: () => const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                  // Navigate to detail (separate from expand tap)
+                  IconButton(
+                    icon: Icon(
+                      Icons.open_in_new_rounded,
+                      size: 16,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    tooltip: 'View habit details',
+                    onPressed: () => context.push('/habit/${widget.habit.id}'),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
                   ),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            // Progress bar
-            rateAsync.when(
-              data: (rate) => ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: rate,
-                  minHeight: 6,
-                  backgroundColor:
-                      isDark ? Colors.white12 : Colors.black.withOpacity(0.07),
-                  valueColor: AlwaysStoppedAnimation<Color>(habitColor),
+          ),
+
+          // ── Expandable detail area ──
+          AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: _expanded
+                ? _HabitDetail(
+                    rateAsync: rateAsync,
+                    dowAsync: dowAsync,
+                    habitColor: habitColor,
+                    isDark: isDark,
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The detail content shown when a habit card is expanded.
+class _HabitDetail extends StatelessWidget {
+  final AsyncValue<double> rateAsync;
+  final AsyncValue<Map<int, double>> dowAsync;
+  final Color habitColor;
+  final bool isDark;
+
+  const _HabitDetail({
+    required this.rateAsync,
+    required this.dowAsync,
+    required this.habitColor,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outline.withOpacity(0.12),
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Progress bar with label
+          Row(
+            children: [
+              Text(
+                'Completion',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              loading: () => ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: null,
-                  minHeight: 6,
-                  backgroundColor:
-                      isDark ? Colors.white12 : Colors.black.withOpacity(0.07),
+              const Spacer(),
+              rateAsync.when(
+                data: (rate) => Text(
+                  '${(rate * 100).round()}% this month',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: habitColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
               ),
-              error: (_, __) => const SizedBox.shrink(),
+            ],
+          ),
+          const SizedBox(height: 6),
+          rateAsync.when(
+            data: (rate) => ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: rate,
+                minHeight: 7,
+                backgroundColor: isDark
+                    ? Colors.white12
+                    : Colors.black.withOpacity(0.07),
+                valueColor: AlwaysStoppedAnimation<Color>(habitColor),
+              ),
             ),
-            const SizedBox(height: 12),
-            // Day-of-week mini chart
-            dowAsync.when(
-              data: (breakdown) =>
-                  _DayOfWeekChart(breakdown: breakdown, color: habitColor),
-              loading: () => const SizedBox(height: 32),
-              error: (_, __) => const SizedBox.shrink(),
+            loading: () => ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: null,
+                minHeight: 7,
+                backgroundColor: isDark
+                    ? Colors.white12
+                    : Colors.black.withOpacity(0.07),
+              ),
             ),
-          ],
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 14),
+          // Day-of-week label
+          Text(
+            'Best days of the week',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          dowAsync.when(
+            data: (breakdown) =>
+                _DayOfWeekChart(breakdown: breakdown, color: habitColor),
+            loading: () => const SizedBox(height: 40),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared small widgets
+// ---------------------------------------------------------------------------
+
+/// Rounded pill showing completion rate.
+class _RatePill extends StatelessWidget {
+  final double rate;
+  final Color color;
+
+  const _RatePill({required this.rate, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '${(rate * 100).round()}%',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+/// Red background revealed when swiping an insight card to dismiss it.
+class _DismissBackground extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Icon(
+        Icons.delete_outline_rounded,
+        color: theme.colorScheme.onErrorContainer,
+        size: 22,
+      ),
+    );
+  }
+}
+
+/// Rounded pill used in section headers (e.g. "+4 more").
+class _SectionPill extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SectionPill({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Show less" text button shown at the bottom of expanded insights.
+class _ShowLessButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ShowLessButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: TextButton.icon(
+        onPressed: onTap,
+        icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 16),
+        label: const Text('Show less'),
+        style: TextButton.styleFrom(
+          foregroundColor: theme.colorScheme.onSurfaceVariant,
+          textStyle: theme.textTheme.labelSmall,
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small count badge shown next to "Habit Breakdown" heading.
+class _CountBadge extends StatelessWidget {
+  final int count;
+
+  const _CountBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$count',
+        style: theme.textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
@@ -576,7 +924,7 @@ class _DayOfWeekChart extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: List.generate(7, (i) {
-        final weekday = i + 1; // 1=Mon … 7=Sun
+        final weekday = i + 1;
         final rate = breakdown[weekday] ?? 0.0;
         return Column(
           children: [

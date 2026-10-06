@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-
 import '../../../shared/widgets/calendar_heatmap.dart';
-import '../../../shared/widgets/streak_counter.dart';
 import '../../habits/domain/habit_providers.dart';
 import '../data/label_model.dart';
 import '../domain/label_providers.dart';

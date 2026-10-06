@@ -1,9 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:habit_tracker/features/streaks/data/streak_model.dart';
-import 'package:habit_tracker/features/checkin/domain/checkin_repository.dart';
-import 'package:habit_tracker/features/checkin/data/checkin_dao.dart';
-import 'package:habit_tracker/features/streaks/data/streak_dao.dart';
-import 'package:habit_tracker/core/database/database_service.dart';
 
 // ---------------------------------------------------------------------------
 // Pure streak-calculation helpers (extracted from CheckInRepository for

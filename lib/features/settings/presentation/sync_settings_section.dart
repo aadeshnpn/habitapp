@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/sync/auth_provider.dart';
 import '../../../core/sync/sync_providers.dart';
-import '../../../core/sync/sync_service.dart';
 
 class SyncSettingsSection extends ConsumerStatefulWidget {
   const SyncSettingsSection({super.key});

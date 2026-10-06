@@ -5,6 +5,7 @@ import '../../../shared/theme/app_palette.dart';
 import '../../../shared/theme/theme_provider.dart';
 import '../../../shared/widgets/app_nav_bar.dart';
 import '../../../shared/widgets/freeze_token_display.dart';
+import 'health_settings_section.dart';
 import 'notification_settings_section.dart';
 import 'sync_settings_section.dart';
 import 'widgets/palette_picker_sheet.dart';
@@ -25,7 +26,7 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Settings'),
       ),
-      bottomNavigationBar: const AppNavBar(currentIndex: 3),
+      bottomNavigationBar: const AppNavBar(currentIndex: 5),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
@@ -151,6 +152,14 @@ class SettingsScreen extends ConsumerWidget {
           ),
 
           const Divider(height: 1),
+
+          // ----------------------------------------------------------------
+          // Section: Health Integration
+          // ----------------------------------------------------------------
+          const _SectionHeader(title: 'Health Integration'),
+          const HealthSettingsSection(),
+          
+          const Divider(height: 32),
 
           // ----------------------------------------------------------------
           // Section: Cloud Sync

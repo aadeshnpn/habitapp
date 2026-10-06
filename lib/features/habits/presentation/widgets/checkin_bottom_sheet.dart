@@ -175,6 +175,8 @@ class _CheckInBottomSheetState extends ConsumerState<CheckInBottomSheet> {
               fontWeight: FontWeight.w700,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 6),
 

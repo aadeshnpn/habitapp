@@ -71,6 +71,8 @@ class LabelCard extends ConsumerWidget {
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         if (streak != null && streak.bestStreak > 0)
                           Text(
@@ -123,22 +125,31 @@ class LabelCard extends ConsumerWidget {
               const SizedBox(height: 12),
 
               // Mini heatmap (last 30 days)
-              completionAsync.when(
-                loading: () => const SizedBox(
-                  height: 40,
-                  child: Center(
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                ),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (completionMap) => CalendarHeatmap(
-                  completionMap: completionMap,
-                  accentColor: labelColor,
-                  days: 30,
+              // KeyedSubtree gives this a stable identity so Flutter matches
+              // it by key when the isAtRisk block inserts items above it,
+              // preventing the CalendarHeatmap (_ScrollableScope) from being
+              // deactivated while new elements still depend on it.
+              KeyedSubtree(
+                key: const ValueKey('label_card_heatmap'),
+                child: completionAsync.when(
+                  loading: () => const SizedBox(
+                    height: 40,
+                    child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (completionMap) => CalendarHeatmap(
+                    completionMap: completionMap,
+                    accentColor: labelColor,
+                    days: 30,
+                  ),
                 ),
               ),
 
               // Member habit chips
-              habitIdsAsync.when(
+              KeyedSubtree(
+                key: const ValueKey('label_card_chips'),
+                child: habitIdsAsync.when(
                 loading: () => const SizedBox.shrink(),
                 error: (_, __) => const SizedBox.shrink(),
                 data: (habitIds) {
@@ -159,6 +170,7 @@ class LabelCard extends ConsumerWidget {
                         runSpacing: 4,
                         children: memberHabits.map((h) {
                           return Chip(
+                            key: ValueKey(h.id),
                             label: Text(
                               '${h.icon} ${h.name}',
                               style: const TextStyle(fontSize: 12),
@@ -175,6 +187,7 @@ class LabelCard extends ConsumerWidget {
                   );
                 },
               ),
+              ),  // KeyedSubtree
             ],
           ),
         ),

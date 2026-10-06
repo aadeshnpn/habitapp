@@ -3,38 +3,47 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/notifications/notification_providers.dart';
 import '../../../features/streaks/domain/streak_calculator.dart';
 import '../../../shared/widgets/celebration_overlay.dart';
-import '../../checkin/domain/checkin_repository.dart';
 import '../../checkin/domain/checkin_service.dart';
+import '../../checkin/data/checkin_model.dart';
 import '../../streaks/domain/streak_providers.dart';
 import '../data/habit_model.dart';
 import '../domain/habit_providers.dart';
 import '../domain/layout_preference_provider.dart';
+import '../domain/garmin_ai_sync_service.dart';
+import '../domain/synced_activities_provider.dart';
+
 import 'layouts/card_list_layout.dart';
 import 'layouts/icon_grid_layout.dart';
 import 'layouts/rings_layout.dart';
 import '../../../shared/widgets/app_nav_bar.dart';
 import 'widgets/checkin_bottom_sheet.dart';
 import 'widgets/layout_toggle_button.dart';
+import 'widgets/garmin_sync_sheet.dart';
+
 
 // ---------------------------------------------------------------------------
 // Derived providers for today's completions and streak counts
 // ---------------------------------------------------------------------------
 
-/// Set of habit IDs completed today.
-final completedTodayProvider = FutureProvider<Set<String>>((ref) async {
+/// Map of habit IDs completed today to their CheckIn.
+final completedTodayProvider = FutureProvider<Map<String, CheckIn>>((ref) async {
   final habits = await ref.watch(activeHabitsProvider.future);
   final repo = ref.read(checkInRepositoryProvider);
 
-  final results = await Future.wait(
+  final Map<String, CheckIn> results = {};
+  await Future.wait(
     habits.map((h) async {
-      final done = await repo.isCompletedToday(h.id);
-      return done ? h.id : null;
+      final checkIn = await repo.getTodayCheckIn(h.id);
+      if (checkIn != null) {
+        results[h.id] = checkIn;
+      }
     }),
   );
 
-  return results.whereType<String>().toSet();
+  return results;
 });
 
 /// Map of habitId → current streak count.
@@ -66,10 +75,64 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// The active celebration overlay, if any.
   OverlayEntry? _celebrationEntry;
+  bool _isSyncingHealth = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncHealthData(showSnackBar: false);
+    });
+  }
+
+  Future<void> _syncHealthData({bool showSnackBar = true}) async {
+    if (_isSyncingHealth) return;
+    setState(() => _isSyncingHealth = true);
+    try {
+      final aiResult = await ref.read(triggerGarminAiSyncProvider.future);
+
+      ref.invalidate(completedTodayProvider);
+      ref.invalidate(streakCountsProvider);
+      ref.invalidate(activeHabitsProvider);
+      ref.invalidate(syncedActivitiesProvider);
+
+      if (showSnackBar && mounted) {
+        final totalAutoCompleted = aiResult.matchedHabitNames.length;
+        final allMatchedNames = aiResult.matchedHabitNames.toList();
+
+        if (totalAutoCompleted > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Garmin AI Sync complete! Auto-logged: ${allMatchedNames.join(', ')} 🤖🎉'),
+              backgroundColor: Colors.green[700],
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Garmin AI Sync complete. No new workouts to auto-log.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (showSnackBar && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Garmin AI sync notice: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncingHealth = false);
+    }
+  }
+
 
   String _todayTitle() {
     return DateFormat('EEEE, MMM d').format(DateTime.now());
   }
+
 
   // ---------------------------------------------------------------------------
   // Celebration helpers
@@ -210,6 +273,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final completedAsync = ref.watch(completedTodayProvider);
     final streaksAsync = ref.watch(streakCountsProvider);
     final atRiskAsync = ref.watch(atRiskHabitsProvider);
+    // Keeps scheduled notifications in sync whenever habits change.
+    ref.watch(scheduleNotificationsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -252,10 +317,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
           ),
+          IconButton(
+            tooltip: 'Sync Garmin / Health Data',
+            icon: _isSyncingHealth
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.watch_outlined),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const GarminSyncSheet(),
+              );
+            },
+
+          ),
           const LayoutToggleButton(),
           const SizedBox(width: 4),
         ],
       ),
+
       body: habitsAsync.when(
         data: (habits) {
           final completed = completedAsync.valueOrNull ?? {};
@@ -265,7 +350,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // All done state
           if (habits.isNotEmpty && completed.length >= habits.length) {
             return _AllDoneState(
-              onAddMore: () => context.go('/habit/add'),
+              onAddMore: () => context.push('/habit/add'),
             );
           }
 
@@ -277,7 +362,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
 
           void handleTap(String habitId) {
-            context.go('/habit/$habitId');
+            context.push('/habit/$habitId');
           }
 
           switch (layout) {
@@ -314,7 +399,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/habit/add'),
+        onPressed: () => context.push('/habit/add'),
         tooltip: 'Add habit',
         child: const Icon(Icons.add),
       ),

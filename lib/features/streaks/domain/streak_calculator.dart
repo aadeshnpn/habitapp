@@ -251,6 +251,9 @@ class StreakCalculator {
   }) {
     final daysDiff = today.difference(lastDay).inDays;
 
+    // Guard against device clock going backward (daysDiff < 0).
+    if (daysDiff < 0) return current;
+
     if (daysDiff == 0) {
       // Checked in today — streak is fine.
       return current.copyWith(state: StreakState.active);

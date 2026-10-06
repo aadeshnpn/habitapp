@@ -4,10 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/habits/data/habit_model.dart';
 import '../../features/streaks/data/streak_model.dart';
 import '../../features/streaks/domain/streak_calculator.dart';
+import '../../features/reminders/data/interval_reminder_model.dart';
 import 'notification_service.dart';
 
 class NotificationScheduler {
-  final NotificationService _service;
+  final NotificationServiceBase _service;
 
   const NotificationScheduler(this._service);
 
@@ -24,7 +25,8 @@ class NotificationScheduler {
     required String habitIcon,
     required StreakData updatedStreak,
   }) async {
-    // Always cancel the at-risk notification — the habit has been completed.
+    // Cancel the daily reminder and at-risk notification — the habit has been completed.
+    await _service.cancelNotification(1000 + habitIndex);
     await _service.cancelNotification(2000 + habitIndex);
 
     // Fire milestone if this streak lands on a celebrated tier.
@@ -52,7 +54,7 @@ class NotificationScheduler {
   /// and streak states. Respects user-level toggle preferences stored in
   /// SharedPreferences.
   Future<void> refreshAll(
-      List<Habit> habits, List<StreakData> streaks) async {
+      List<Habit> habits, List<StreakData> streaks, Set<String> completedToday) async {
     final prefs = await SharedPreferences.getInstance();
     final dailyEnabled = prefs.getBool('notif_daily') ?? true;
     final atRiskEnabled = prefs.getBool('notif_atrisk') ?? true;
@@ -67,7 +69,7 @@ class NotificationScheduler {
 
       // --- Daily reminder ---
       if (dailyEnabled && habit.reminderTime != null) {
-        final tod = _parseTimeOfDay(habit.reminderTime!);
+        final tod = NotificationScheduler._parseTimeOfDay(habit.reminderTime!);
         if (tod != null) {
           await _service.scheduleHabitReminder(
             index: i,
@@ -75,6 +77,7 @@ class NotificationScheduler {
             habitName: habit.name,
             habitIcon: habit.icon,
             time: tod,
+            alreadyCompletedToday: completedToday.contains(habit.id),
           );
         }
       } else {
@@ -114,11 +117,44 @@ class NotificationScheduler {
   }
 
   // ---------------------------------------------------------------------------
+  // Called on app open — refresh interval reminder notifications
+  // ---------------------------------------------------------------------------
+
+  /// Schedule or cancel interval reminder notifications based on [reminders].
+  /// Each active reminder gets one `zonedSchedule` per time slot in its window.
+  Future<void> refreshIntervalReminders(
+      List<IntervalReminder> reminders) async {
+    final prefs = await SharedPreferences.getInstance();
+    final intervalsEnabled = prefs.getBool('notif_intervals') ?? true;
+
+    for (var i = 0; i < reminders.length; i++) {
+      final reminder = reminders[i];
+      if (intervalsEnabled && reminder.isActive) {
+        await _service.scheduleIntervalReminder(
+          reminderIndex: i,
+          reminderId: reminder.id,
+          reminderName: reminder.name,
+          reminderIcon: reminder.icon,
+          slots: reminder.dailySlots,
+        );
+      } else {
+        await _service.cancelIntervalReminder(i);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
   /// Parse a reminder_time string stored as "HH:MM" into a [TimeOfDay].
-  TimeOfDay? _parseTimeOfDay(String timeStr) {
+  /// Exposed as a static method so it can be unit-tested directly.
+  @visibleForTesting
+  static TimeOfDay? parseTimeOfDay(String timeStr) {
+    return _parseTimeOfDay(timeStr);
+  }
+
+  static TimeOfDay? _parseTimeOfDay(String timeStr) {
     final parts = timeStr.split(':');
     if (parts.length != 2) return null;
     final hour = int.tryParse(parts[0]);

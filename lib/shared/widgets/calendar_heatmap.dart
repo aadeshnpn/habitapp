@@ -33,8 +33,10 @@ class CalendarHeatmap extends StatelessWidget {
     // Align so that today falls in the last row of the last column
     // We pad the front with nulls to align to week boundaries
     final startDow = dateList.first.weekday % 7; // 0=Sun,1=Mon,...,6=Sat
-    final paddedFront = List<DateTime?>.filled(startDow, null)
-      ..addAll(dateList.map<DateTime?>((d) => d));
+    final paddedFront = <DateTime?>[
+      ...List<DateTime?>.filled(startDow, null),
+      ...dateList.map<DateTime?>((d) => d),
+    ];
     // Pad the end to fill the last column
     final remainder = paddedFront.length % 7;
     if (remainder != 0) {

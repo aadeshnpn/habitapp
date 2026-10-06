@@ -8,6 +8,7 @@ class HabitCard extends StatefulWidget {
   final String icon;
   final int streakCount;
   final bool isCompleted;
+  final bool isAutoLogged;
   final bool isAtRisk;
   final Color accentColor;
   final VoidCallback onTap;
@@ -20,6 +21,7 @@ class HabitCard extends StatefulWidget {
     required this.icon,
     required this.streakCount,
     required this.isCompleted,
+    this.isAutoLogged = false,
     required this.isAtRisk,
     required this.accentColor,
     required this.onTap,
@@ -144,6 +146,30 @@ class _HabitCardState extends State<HabitCard>
                                     color: const Color(0xFFB8860B),
                                     fontWeight: FontWeight.w600,
                                   ),
+                                ),
+                              ),
+                            ],
+                            if (widget.isAutoLogged) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: widget.accentColor.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.auto_awesome, size: 10, color: widget.accentColor),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      'Auto',
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: widget.accentColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],

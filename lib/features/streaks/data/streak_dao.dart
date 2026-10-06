@@ -10,6 +10,12 @@ class StreakDao {
 
   static const String _table = 'streak_data';
 
+  Future<List<StreakData>> getAll() async {
+    final db = await _db.database;
+    final rows = await db.query(_table);
+    return rows.map(StreakData.fromMap).toList();
+  }
+
   Future<StreakData?> getForHabit(String habitId) async {
     final db = await _db.database;
     final rows = await db.query(

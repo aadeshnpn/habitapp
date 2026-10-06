@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/app_nav_bar.dart';
+import '../../../shared/widgets/emoji_picker_sheet.dart';
 import '../data/label_model.dart';
 import '../domain/label_providers.dart';
 import '../domain/label_repository.dart';
@@ -26,7 +27,7 @@ class LabelsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: const AppNavBar(currentIndex: 2),
+      bottomNavigationBar: const AppNavBar(currentIndex: 4),
       body: labelsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -47,6 +48,7 @@ class LabelsScreen extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final label = labels[index];
                 return LabelCard(
+                  key: ValueKey(label.id),
                   label: label,
                   onTap: () => context.push('/labels/${label.id}'),
                 );
@@ -122,12 +124,6 @@ class _EmptyLabelsState extends StatelessWidget {
 // Create Label Bottom Sheet
 // ---------------------------------------------------------------------------
 
-const _kLabelEmojis = [
-  '💪', '🧘', '📚', '🏃', '💧', '🎯', '🌿', '🎨',
-  '💻', '🎵', '🚴', '🤸', '🏊', '🍎', '😴', '🧹',
-  '💊', '🌅', '🍵', '🚶', '📝', '🎸', '🏋️', '✍️',
-  '🧠', '🥗', '🐕', '🎮', '🌟', '🔥',
-];
 
 const _kLabelColorOptions = [
   Color(0xFF4CAF50),
@@ -149,7 +145,7 @@ class _CreateLabelSheet extends StatefulWidget {
 
 class _CreateLabelSheetState extends State<_CreateLabelSheet> {
   final _nameController = TextEditingController();
-  String _selectedEmoji = _kLabelEmojis.first;
+  String _selectedEmoji = EmojiPickerSheet.defaultSuggestions.first;
   Color _selectedColor = _kLabelColorOptions.first;
   bool _isSaving = false;
 
@@ -259,30 +255,40 @@ class _CreateLabelSheetState extends State<_CreateLabelSheet> {
           const SizedBox(height: 16),
           Text('Emoji', style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _kLabelEmojis.map((emoji) {
-              final isSelected = emoji == _selectedEmoji;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedEmoji = emoji),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: isSelected ? _selectedColor.withOpacity(0.15) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isSelected ? _selectedColor : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(emoji, style: const TextStyle(fontSize: 20)),
+          GestureDetector(
+            onTap: () async {
+              final picked = await showModalBottomSheet<String>(
+                context: context,
+                isScrollControlled: true,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
+                builder: (_) => EmojiPickerSheet(currentEmoji: _selectedEmoji),
               );
-            }).toList(),
+              if (picked != null && mounted) {
+                setState(() => _selectedEmoji = picked);
+              }
+            },
+            child: Container(
+              key: const ValueKey('label_emoji_button'),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: _selectedColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _selectedColor.withOpacity(0.4), width: 1.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_selectedEmoji, style: const TextStyle(fontSize: 28)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Tap to change',
+                    style: TextStyle(fontSize: 13, color: _selectedColor),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           SizedBox(

@@ -87,7 +87,14 @@ class Habit {
       icon: map['icon'] as String,
       color: map['color'] as int,
       frequencyType: FrequencyType.values.byName(map['frequency_type'] as String),
-      daysOfWeek: List<int>.from(jsonDecode(map['days_of_week'] as String? ?? '[]')),
+      daysOfWeek: () {
+        try {
+          return List<int>.from(
+              jsonDecode(map['days_of_week'] as String? ?? '[]') as List);
+        } catch (_) {
+          return <int>[];
+        }
+      }(),
       timesPerWeek: map['times_per_week'] as int? ?? 0,
       checkInType: CheckInType.values.byName(map['check_in_type'] as String? ?? 'tap'),
       quantityUnit: map['quantity_unit'] as String?,
@@ -147,3 +154,4 @@ bool _listEquals<T>(List<T> a, List<T> b) {
   }
   return true;
 }
+
