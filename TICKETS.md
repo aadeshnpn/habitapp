@@ -259,3 +259,24 @@ Once EPIC 1 is merged to `develop`:
 | **C — Features** | 5 → 7 → 10 | Needs A + B done first |
 | **D — Stats** | 11 | Needs A done |
 | **E — Sync** | 12 → 13 | Needs A done |
+
+---
+
+## EPIC 14: Label Streaks
+**Branch**: `feature/HABIT-130-label-streaks`
+**Total SP**: 21
+**Depends on**: EPIC 2 (data), EPIC 8 (streak engine), EPIC 6 (home screen nav)
+
+A label groups multiple habits under one tag. The label's streak increments on any day at least one habit with that label is completed — OR logic, not AND.
+
+Example: Label "Physical Exercise" covers Swimming, Biking, Running. Do any one of them → label streak continues.
+
+| Ticket | Title | SP | Notes |
+|---|---|---|---|
+| HABIT-130 | Label model + SQLite schema (labels + habit_labels junction) | 3 | many-to-many: one habit can have multiple labels |
+| HABIT-131 | LabelStreakCalculator — OR logic across member habits | 3 | pure function like StreakCalculator; streak continues if any member habit checked in today |
+| HABIT-132 | LabelRepository + LabelStreakService | 3 | CRUD for labels, compute + persist label streak |
+| HABIT-133 | Tag assignment UI (AddHabit/EditHabit) | 3 | chip multi-select + "New label" inline creation |
+| HABIT-134 | Labels visualization tab screen | 5 | per-label: streak counter, calendar heatmap, member habit list |
+| HABIT-135 | Labels tab in bottom nav + router | 2 | 4th nav item, route /labels |
+| HABIT-136 | Label streak updates on habit check-in | 2 | hook into CheckInService |
