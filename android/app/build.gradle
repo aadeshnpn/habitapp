@@ -54,6 +54,10 @@ android {
             signingConfig keystorePropertiesFile.exists()
                     ? signingConfigs.release
                     : signingConfigs.debug
+            // Keep rules needed so Gson TypeToken generics survive R8 and
+            // flutter_local_notifications can persist scheduled alarms.
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                    'proguard-rules.pro'
         }
     }
 }
@@ -65,4 +69,8 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation(platform("com.google.firebase:firebase-bom:32.7.4"))
+    // Gson 2.11+ ships R8 rules that retain TypeToken generic signatures.
+    // Fixes release-only: PlatformException TypeToken must be created with a type argument
+    // when calling zonedSchedule / pendingNotificationRequests.
+    implementation("com.google.code.gson:gson:2.11.0")
 }

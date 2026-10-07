@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/notifications/notification_providers.dart';
+import '../../../core/notifications/notification_service.dart';
 
 // ---------------------------------------------------------------------------
 // State provider backed by SharedPreferences
@@ -115,10 +117,86 @@ class _NotificationSettingsSectionState
                 setState(() => _milestone = value);
               }),
             ),
+            const Divider(height: 24),
+            // Manual delivery tests — debug / profile builds only.
+            if (kDebugMode) ...[
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Send test notification now'),
+                subtitle: const Text(
+                  'Debug only — checks permission and channels',
+                ),
+                onTap: () => _runTest(() async {
+                  await NotificationService.instance.showTestNotification();
+                  return 'Test notification sent';
+                }),
+              ),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: const Icon(Icons.schedule_outlined),
+                title: const Text('Schedule test in 1 minute'),
+                subtitle: const Text(
+                  'Debug only — verifies background scheduling',
+                ),
+                onTap: () => _runTest(() async {
+                  await NotificationService.instance
+                      .scheduleTestNotification(minutesFromNow: 1);
+                  final exact = await NotificationService.instance
+                      .canScheduleExactNotifications();
+                  if (!exact) {
+                    return 'Scheduled (~1 min, may be a bit late). '
+                        'For on-time delivery, enable Alarms & reminders.';
+                  }
+                  return 'Scheduled in ~1 minute. Leave the app and wait.';
+                }),
+              ),
+            ],
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              leading: const Icon(Icons.alarm_on_outlined),
+              title: const Text('Open Alarms & reminders permission'),
+              subtitle: const Text(
+                'Required on Pixel / Android 14+ for on-time alerts',
+              ),
+              onTap: () => _runTest(() async {
+                final exact = await NotificationService.instance
+                    .requestExactAlarmsPermissionOnly();
+                return exact
+                    ? 'Exact alarms allowed'
+                    : 'Exact alarms still denied — grant Alarms & reminders '
+                        'for Habit Tracker in system settings';
+              }),
+            ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _runTest(Future<String> Function() action) async {
+    try {
+      final message = await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final friendly = e.toString().contains('exact_alarms_not_permitted')
+          ? 'Exact alarms are blocked. Tap “Open Alarms & reminders '
+              'permission”, enable it, then try Schedule test again.'
+          : e.toString().replaceFirst('Bad state: ', '').replaceFirst(
+                'StateError: ',
+                '',
+              );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(friendly),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
   }
 
   Future<void> _toggle(
