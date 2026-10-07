@@ -163,6 +163,18 @@ class _FakeNotificationService implements NotificationServiceBase {
     required String habitIcon,
     int snoozeMinutes = 30,
   }) async {}
+
+  @override
+  Future<void> showTestNotification() async {}
+
+  @override
+  Future<void> scheduleTestNotification({int minutesFromNow = 1}) async {}
+
+  @override
+  Future<int> pendingNotificationCount() async => 0;
+
+  @override
+  Future<bool> canScheduleExactNotifications() async => true;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,17 +1,60 @@
-# habit_tracker
+# Habit Tracker
 
-A new Flutter project.
+Flutter habit tracking app (`habit_tracker`) for daily habits, check-ins, and streaks. Local SQLite persistence; optional Firebase sync, health sync, reminders, and mindfulness bell.
 
-## Getting Started
+## Stack
 
-This project is a starting point for a Flutter application.
+- Flutter / Dart, Riverpod, go_router
+- SQLite (`sqflite`; web uses `sqflite_common_ffi_web`)
+- flutter_local_notifications, Firebase Auth/Firestore (optional)
 
-A few resources to get you started if this is your first Flutter project:
+## Features (already on `develop`)
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- Add / edit / archive habits
+- Check in today (tap, note, or quantity)
+- Streak engine with grace period + freeze tokens
+- Home layouts: card list, icon grid, progress rings
+- Onboarding, labels, stats, settings, reminders, mindfulness bell
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Toolchain (this machine)
+
+A project-local Flutter SDK lives under `.toolchain/`:
+
+```bash
+export PATH="$PWD/.toolchain/flutter/bin:$PATH"
+```
+
+## Run
+
+```bash
+export PATH="$PWD/.toolchain/flutter/bin:$PATH"
+flutter pub get
+
+# Web (debug server — good for quick UI checks)
+flutter run -d web-server --web-port=43123 --web-hostname=127.0.0.1
+# then open http://127.0.0.1:43123
+
+# Chrome
+flutter run -d chrome --web-port=43123
+
+# Linux desktop
+flutter run -d linux
+
+# Android (device/emulator + Android SDK under .toolchain/android-sdk)
+flutter run -d android
+```
+
+## Test / analyze
+
+```bash
+export PATH="$PWD/.toolchain/flutter/bin:$PATH"
+flutter test
+flutter analyze
+```
+
+## Docs
+
+- Architecture & commands: [CLAUDE.md](CLAUDE.md)
+- Tickets / epics: [TICKETS.md](TICKETS.md)
+- Screen map: [docs/APP_SCREENS.md](docs/APP_SCREENS.md)
+- Branching: [CONTRIBUTING.md](CONTRIBUTING.md)
