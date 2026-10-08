@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/routes.dart';
+import 'core/notifications/notification_service.dart';
 import 'core/notifications/notification_test_bridge.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/theme/theme_provider.dart';
@@ -17,12 +18,16 @@ class _HabitTrackerAppState extends ConsumerState<HabitTrackerApp> {
   @override
   void initState() {
     super.initState();
-    // Emulator/CI notif_test intent bridge — never arm in release.
-    if (kDebugMode) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        NotificationTestBridge.consumePendingLaunchTest();
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!kIsWeb) {
+        // Re-ensure channels once the Activity MethodChannel is definitely live.
+        await NotificationService.instance.ensureMindfulnessChannels();
+      }
+      // Emulator/CI notif_test intent bridge — never arm in release.
+      if (kDebugMode) {
+        await NotificationTestBridge.consumePendingLaunchTest();
+      }
+    });
   }
 
   @override
