@@ -3,7 +3,7 @@ import 'package:path/path.dart' as p;
 
 class DatabaseService {
   static const String _dbName = 'habit_tracker.db';
-  static const int _dbVersion = 7;
+  static const int _dbVersion = 8;
 
   // Singleton
   static final DatabaseService instance = DatabaseService._();
@@ -36,6 +36,7 @@ class DatabaseService {
       CREATE TABLE habits (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        description TEXT,
         icon TEXT NOT NULL,
         color INTEGER NOT NULL,
         frequency_type TEXT NOT NULL,
@@ -284,6 +285,15 @@ class DatabaseService {
           'CREATE INDEX IF NOT EXISTS idx_interval_check_ins_reminder ON interval_check_ins(reminder_id)');
       await db.execute(
           'CREATE INDEX IF NOT EXISTS idx_interval_check_ins_logged_at ON interval_check_ins(reminder_id, logged_at DESC)');
+    }
+
+    if (oldVersion < 8) {
+      final cols = (await db.rawQuery('PRAGMA table_info(habits)'))
+          .map((r) => r['name'] as String)
+          .toSet();
+      if (!cols.contains('description')) {
+        await db.execute('ALTER TABLE habits ADD COLUMN description TEXT');
+      }
     }
   }
 

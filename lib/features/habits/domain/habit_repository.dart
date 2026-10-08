@@ -6,6 +6,7 @@ import '../../streaks/data/streak_dao.dart';
 
 class CreateHabitParams {
   final String name;
+  final String? description;
   final String icon;
   final int color;
   final FrequencyType frequencyType;
@@ -17,6 +18,7 @@ class CreateHabitParams {
 
   const CreateHabitParams({
     required this.name,
+    this.description,
     required this.icon,
     required this.color,
     required this.frequencyType,
@@ -49,9 +51,13 @@ class HabitRepository {
   }
 
   Future<Habit> createHabit(CreateHabitParams params) async {
+    final trimmedDescription = params.description?.trim();
     final habit = Habit(
       id: _uuid.v4(),
       name: params.name,
+      description: (trimmedDescription == null || trimmedDescription.isEmpty)
+          ? null
+          : trimmedDescription,
       icon: params.icon,
       color: params.color,
       frequencyType: params.frequencyType,

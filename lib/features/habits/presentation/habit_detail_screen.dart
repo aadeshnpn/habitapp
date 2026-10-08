@@ -147,14 +147,30 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
           _HabitSliverAppBar(
             habit: habit,
             accentColor: accentColor,
-            onEdit: () =>
-                context.pushNamed('editHabit', pathParameters: {'id': habit.id}),
+            onEdit: () async {
+              await context.pushNamed(
+                'editHabit',
+                pathParameters: {'id': habit.id},
+              );
+              if (mounted) await _load();
+            },
             onArchive: _archiveHabit,
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                if (habit.description != null &&
+                    habit.description!.trim().isNotEmpty) ...[
+                  Text(
+                    habit.description!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Stats row
                 _StatsRow(
                   currentStreak: streak.currentStreak,

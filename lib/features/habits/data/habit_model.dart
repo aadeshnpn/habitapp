@@ -4,9 +4,14 @@ enum FrequencyType { daily, daysOfWeek, timesPerWeek }
 
 enum CheckInType { tap, note, quantity }
 
+/// Sentinel so [Habit.copyWith] can clear nullable [description].
+const Object _unset = Object();
+
 class Habit {
   final String id;
   final String name;
+  /// Optional free-text used for UI and Health Connect activity matching.
+  final String? description;
   final String icon;
   final int color;
   final FrequencyType frequencyType;
@@ -21,6 +26,7 @@ class Habit {
   const Habit({
     required this.id,
     required this.name,
+    this.description,
     required this.icon,
     required this.color,
     required this.frequencyType,
@@ -33,9 +39,17 @@ class Habit {
     required this.createdAt,
   });
 
+  /// Name + description text used when matching Health Connect activities.
+  String get matchText {
+    final desc = description?.trim();
+    if (desc == null || desc.isEmpty) return name;
+    return '$name $desc';
+  }
+
   Habit copyWith({
     String? id,
     String? name,
+    Object? description = _unset,
     String? icon,
     int? color,
     FrequencyType? frequencyType,
@@ -50,6 +64,9 @@ class Habit {
     return Habit(
       id: id ?? this.id,
       name: name ?? this.name,
+      description: identical(description, _unset)
+          ? this.description
+          : description as String?,
       icon: icon ?? this.icon,
       color: color ?? this.color,
       frequencyType: frequencyType ?? this.frequencyType,
@@ -67,6 +84,7 @@ class Habit {
     return {
       'id': id,
       'name': name,
+      'description': description,
       'icon': icon,
       'color': color,
       'frequency_type': frequencyType.name,
@@ -81,9 +99,13 @@ class Habit {
   }
 
   factory Habit.fromMap(Map<String, dynamic> map) {
+    final rawDescription = map['description'] as String?;
     return Habit(
       id: map['id'] as String,
       name: map['name'] as String,
+      description: (rawDescription == null || rawDescription.trim().isEmpty)
+          ? null
+          : rawDescription,
       icon: map['icon'] as String,
       color: map['color'] as int,
       frequencyType: FrequencyType.values.byName(map['frequency_type'] as String),
@@ -110,6 +132,7 @@ class Habit {
     return other is Habit &&
         other.id == id &&
         other.name == name &&
+        other.description == description &&
         other.icon == icon &&
         other.color == color &&
         other.frequencyType == frequencyType &&
@@ -127,6 +150,7 @@ class Habit {
     return Object.hash(
       id,
       name,
+      description,
       icon,
       color,
       frequencyType,
@@ -142,8 +166,9 @@ class Habit {
 
   @override
   String toString() {
-    return 'Habit(id: $id, name: $name, frequencyType: $frequencyType, '
-        'checkInType: $checkInType, isArchived: $isArchived)';
+    return 'Habit(id: $id, name: $name, description: $description, '
+        'frequencyType: $frequencyType, checkInType: $checkInType, '
+        'isArchived: $isArchived)';
   }
 }
 

@@ -1,7 +1,7 @@
 name: habit_tracker
 description: A habit tracking app to build and maintain daily habits.
 publish_to: 'none'
-version: 1.0.11+11
+version: 1.0.12+12
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
