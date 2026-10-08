@@ -32,6 +32,7 @@ class EditHabitScreen extends ConsumerStatefulWidget {
 class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   bool _loaded = false;
   bool _isSaving = false;
@@ -58,6 +59,7 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -68,6 +70,7 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
 
     _originalHabit = habit;
     _nameController.text = habit.name;
+    _descriptionController.text = habit.description ?? '';
     _selectedEmoji = habit.icon;
 
     // Find best-matching color from the palette
@@ -139,8 +142,10 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
     if (_originalHabit == null) return;
     setState(() => _isSaving = true);
     try {
+      final description = _descriptionController.text.trim();
       final updated = _originalHabit!.copyWith(
         name: _nameController.text.trim(),
+        description: description.isEmpty ? null : description,
         icon: _selectedEmoji,
         color: _selectedColor.value,
         frequencyType: _frequencyType,
@@ -265,6 +270,27 @@ class _EditHabitScreenState extends ConsumerState<EditHabitScreen> {
                 }
                 return null;
               },
+            ),
+            const SizedBox(height: 16),
+
+            // Optional description (helps Health Connect matching)
+            TextFormField(
+              controller: _descriptionController,
+              maxLength: 200,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Description (optional)',
+                hintText: 'e.g. running, trail run, jogging',
+                helperText:
+                    'Used to match Health Connect activities to this habit',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.notes_outlined),
+                alignLabelWithHint: true,
+              ),
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.done,
             ),
             const SizedBox(height: 24),
 
