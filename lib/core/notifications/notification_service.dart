@@ -103,10 +103,6 @@ class NotificationService extends NotificationServiceBase {
   static const _intervalChannelName = 'Interval Reminders';
   static const _intervalChannelDesc = 'Hydration, medication, movement reminders';
 
-  /// Channel prefix — bump when sound assets / URI wiring change. Android will
-  /// not update an existing channel's sound; a new id forces recreation.
-  static const _mindfulnessChannelPrefix = 'mindfulness_bell_v4_';
-
   static const mindfulnessSoundIds = [
     'bowl',
     'chime',
@@ -115,17 +111,11 @@ class NotificationService extends NotificationServiceBase {
     'gong',
   ];
 
-  static const _legacyMindfulnessChannelPrefixes = [
-    'mindfulness_bell_',
-    'mindfulness_bell_v2_',
-    'mindfulness_bell_v3_',
-  ];
-
-  static const _channelSetup = MethodChannel('habitapp/notif_channels');
+  /// Native media-stream mindfulness bell (AlarmManager + ForegroundService).
+  static const _mindfulnessBellChannel = MethodChannel('habitapp/mindfulness_bell');
 
   static const _testNotifId = 9998;
   static const _testScheduleId = 9997;
-  static const _mindfulnessTestId = 9996;
 
   static void Function(String habitId)? onNotificationTap;
 
@@ -149,16 +139,13 @@ class NotificationService extends NotificationServiceBase {
     );
     await _createChannel();
     await _createIntervalChannel();
-    await ensureMindfulnessChannels();
+    // Cancel any legacy FLN-based mindfulness notification schedules.
+    await _cancelLegacyMindfulnessNotifications();
     await _refreshExactAlarmCapability();
     debugPrint(
       'NotificationService ready tz=$_timezoneName exact=$_exactAlarmsAllowed',
     );
   }
-
-  /// Creates / refreshes mindfulness channels with correct sound URIs.
-  /// Safe to call multiple times (e.g. after the Activity MethodChannel is ready).
-  Future<void> ensureMindfulnessChannels() => _createMindfulnessChannels();
 
   Future<void> _configureLocalTimezone() async {
     try {
@@ -431,48 +418,46 @@ class NotificationService extends NotificationServiceBase {
     required List<tz.TZDateTime> whenList,
   }) async {
     if (kIsWeb) return 0;
+    // Notification permission still needed for the silent 10s status chip.
     await requestNotificationPermissionOnly();
-    await cancelMindfulnessBells();
+    await _cancelLegacyMindfulnessNotifications();
 
     final sound = _normalizeSoundId(soundId);
-    final limited = whenList.take(NotificationIds.maxMindfulnessSlots).toList();
     final now = tz.TZDateTime.now(tz.local);
-    var scheduled = 0;
+    final timesMs = whenList
+        .where((w) => w.isAfter(now))
+        .take(NotificationIds.maxMindfulnessSlots)
+        .map((w) => w.millisecondsSinceEpoch)
+        .toList();
 
-    for (var i = 0; i < limited.length; i++) {
-      final when = limited[i];
-      if (!when.isAfter(now)) continue;
-      // Jittered bells do not need alarmClock — prefer inexact so Pixel can
-      // accept dozens of slots without exact-alarm quota pressure.
-      final ok = await _safeZonedSchedule(
-        id: NotificationIds.mindfulness(i),
-        title: 'Mindfulness',
-        body: 'Take a breath',
-        when: when,
-        details: _mindfulnessNotifDetails(sound),
-        payload: 'mindfulness',
-        preferInexact: true,
+    try {
+      final scheduled = await _mindfulnessBellChannel.invokeMethod<int>(
+        'schedule',
+        {
+          'soundId': sound,
+          'timesMs': timesMs,
+        },
       );
-      if (ok) scheduled++;
+      debugPrint(
+        'Mindfulness media scheduled=${scheduled ?? 0}/${timesMs.length} '
+        'sound=$sound tz=$_timezoneName',
+      );
+      return scheduled ?? 0;
+    } catch (e, st) {
+      debugPrint('Mindfulness media schedule failed: $e\n$st');
+      return 0;
     }
-    debugPrint(
-      'Mindfulness scheduled=$scheduled/${limited.length} '
-      'sound=$sound tz=$_timezoneName exact=$_exactAlarmsAllowed',
-    );
-    return scheduled;
   }
 
   @override
   Future<void> cancelMindfulnessBells() async {
     if (kIsWeb) return;
-    final futures = List.generate(
-      NotificationIds.maxMindfulnessSlots,
-      (i) => _plugin.cancel(NotificationIds.mindfulness(i)),
-    );
-    await Future.wait([
-      ...futures,
-      _plugin.cancel(_mindfulnessTestId),
-    ]);
+    await _cancelLegacyMindfulnessNotifications();
+    try {
+      await _mindfulnessBellChannel.invokeMethod<void>('cancel');
+    } catch (e) {
+      debugPrint('Mindfulness media cancel failed: $e');
+    }
   }
 
   @override
@@ -480,12 +465,14 @@ class NotificationService extends NotificationServiceBase {
     if (kIsWeb) return;
     await requestNotificationPermissionOnly();
     final sound = _normalizeSoundId(soundId);
-    await _plugin.show(
-      6999,
-      'Mindfulness',
-      'Take a breath',
-      _mindfulnessNotifDetails(sound),
-    );
+    try {
+      await _mindfulnessBellChannel.invokeMethod<void>('preview', {
+        'soundId': sound,
+      });
+    } catch (e) {
+      debugPrint('Mindfulness media preview failed: $e');
+      rethrow;
+    }
   }
 
   @override
@@ -495,28 +482,33 @@ class NotificationService extends NotificationServiceBase {
   }) async {
     if (kIsWeb || kReleaseMode) return;
     await requestNotificationPermissionOnly();
-    try {
-      await _plugin.cancel(_mindfulnessTestId);
-    } catch (_) {}
     final sound = _normalizeSoundId(soundId);
-    final when = tz.TZDateTime.now(tz.local).add(
-      Duration(minutes: minutesFromNow),
+    final when = DateTime.now().add(Duration(minutes: minutesFromNow));
+    final scheduled = await _mindfulnessBellChannel.invokeMethod<int>(
+      'schedule',
+      {
+        'soundId': sound,
+        'timesMs': [when.millisecondsSinceEpoch],
+      },
     );
-    final ok = await _safeZonedSchedule(
-      id: _mindfulnessTestId,
-      title: 'Mindfulness test',
-      body: 'Bell sound "$sound" — scheduled ${minutesFromNow}m ahead.',
-      when: when,
-      details: _mindfulnessNotifDetails(sound),
-      payload: 'mindfulness',
-      preferInexact: true,
-    );
-    if (!ok) {
+    if (scheduled == null || scheduled < 1) {
       throw StateError(
-        'Could not schedule mindfulness test. Check notification permission '
-        'and Alarms & reminders, then try again.',
+        'Could not schedule mindfulness media test. Enable Alarms & reminders '
+        'and notification permission, then try again.',
       );
     }
+  }
+
+  Future<void> _cancelLegacyMindfulnessNotifications() async {
+    final futures = List.generate(
+      NotificationIds.maxMindfulnessSlots,
+      (i) => _plugin.cancel(NotificationIds.mindfulness(i)),
+    );
+    await Future.wait([
+      ...futures,
+      _plugin.cancel(6999),
+      _plugin.cancel(9996),
+    ]);
   }
 
   @override
@@ -707,44 +699,6 @@ class NotificationService extends NotificationServiceBase {
     await _androidPlugin?.createNotificationChannel(channel);
   }
 
-  Future<void> _createMindfulnessChannels() async {
-    // Native setup only: Pixel/Android 8+ often stays silent when the channel
-    // sound URI is the name-based form (`.../raw/bowl`). Native code uses the
-    // numeric resource-id form (`android.resource://pkg/<id>`).
-    // Do NOT fall back to flutter_local_notifications channel creation — that
-    // would permanently register a silent/broken channel for this id.
-    try {
-      final created = await _channelSetup.invokeMethod<int>(
-        'setupMindfulnessChannels',
-        {
-          'sounds': mindfulnessSoundIds,
-          'prefix': _mindfulnessChannelPrefix,
-          'legacyPrefixes': _legacyMindfulnessChannelPrefixes,
-        },
-      );
-      debugPrint('Mindfulness channels created via native=$created');
-    } catch (e) {
-      debugPrint('Native mindfulness channel setup failed: $e');
-    }
-  }
-
-  static String _soundLabel(String soundId) {
-    switch (soundId) {
-      case 'bowl':
-        return 'Bowl';
-      case 'chime':
-        return 'Chime';
-      case 'soft_bell':
-        return 'Soft Bell';
-      case 'wood':
-        return 'Wood';
-      case 'gong':
-        return 'Gong';
-      default:
-        return soundId;
-    }
-  }
-
   static String _normalizeSoundId(String soundId) {
     if (mindfulnessSoundIds.contains(soundId)) return soundId;
     return 'bowl';
@@ -797,27 +751,6 @@ class NotificationService extends NotificationServiceBase {
             cancelNotification: true,
           ),
         ],
-      ),
-    );
-  }
-
-  NotificationDetails _mindfulnessNotifDetails(String soundId) {
-    final channelId = '$_mindfulnessChannelPrefix$soundId';
-    return NotificationDetails(
-      android: AndroidNotificationDetails(
-        channelId,
-        'Mindfulness Bell (${_soundLabel(soundId)})',
-        channelDescription: 'Mindfulness bell sound and vibration',
-        importance: Importance.max,
-        priority: Priority.max,
-        icon: '@mipmap/ic_launcher',
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound(soundId),
-        enableVibration: true,
-        autoCancel: true,
-        category: AndroidNotificationCategory.reminder,
-        visibility: NotificationVisibility.public,
-        audioAttributesUsage: AudioAttributesUsage.notification,
       ),
     );
   }

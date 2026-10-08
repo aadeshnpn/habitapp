@@ -1,7 +1,6 @@
 // App-wide constants
 class AppConstants {
   static const String appName = 'Habit Tracker';
-  static const String appVersion = '1.0.0';
 
   // Database
   static const String dbName = 'habit_tracker.db';
