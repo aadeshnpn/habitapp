@@ -58,6 +58,9 @@ android {
             // flutter_local_notifications can persist scheduled alarms.
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
                     'proguard-rules.pro'
+            // Mindfulness bell OGG files are looked up by name at runtime
+            // (getIdentifier). Keep them even when shrinkResources is on.
+            shrinkResources true
         }
     }
 }

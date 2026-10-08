@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep mindfulness bell sounds. They are loaded via Resources.getIdentifier
+     at runtime, so R8 resource shrinking would otherwise drop them in release. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/bowl,@raw/chime,@raw/soft_bell,@raw/wood,@raw/gong" />
