@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../features/habits/domain/layout_preference_provider.dart';
 import '../../../shared/theme/app_palette.dart';
 import '../../../shared/theme/theme_provider.dart';
@@ -12,6 +13,10 @@ import 'sync_settings_section.dart';
 import 'widgets/palette_picker_sheet.dart';
 import 'widgets/theme_mode_selector.dart';
 
+final _packageInfoProvider = FutureProvider<PackageInfo>((ref) {
+  return PackageInfo.fromPlatform();
+});
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -22,6 +27,14 @@ class SettingsScreen extends ConsumerWidget {
 
     final layoutAsync = ref.watch(layoutPreferenceProvider);
     final currentLayout = layoutAsync.valueOrNull ?? HomeLayout.cardList;
+    final packageInfoAsync = ref.watch(_packageInfoProvider);
+    final versionLabel = packageInfoAsync.when(
+      data: (info) => info.buildNumber.isEmpty
+          ? info.version
+          : '${info.version} (${info.buildNumber})',
+      loading: () => '…',
+      error: (_, __) => '—',
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -192,12 +205,12 @@ class SettingsScreen extends ConsumerWidget {
           // ----------------------------------------------------------------
           const _SectionHeader(title: 'About'),
 
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('Version'),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Version'),
             trailing: Text(
-              '1.0.0',
-              style: TextStyle(color: Colors.grey),
+              versionLabel,
+              style: const TextStyle(color: Colors.grey),
             ),
           ),
 
