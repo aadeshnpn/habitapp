@@ -137,7 +137,7 @@ class _FakeNotificationService implements NotificationServiceBase {
   }
 
   @override
-  Future<void> scheduleMindfulnessBells({
+  Future<int> scheduleMindfulnessBells({
     required String soundId,
     required List<tz.TZDateTime> whenList,
   }) async {
@@ -145,6 +145,7 @@ class _FakeNotificationService implements NotificationServiceBase {
       'soundId': soundId,
       'whenList': whenList,
     });
+    return whenList.length;
   }
 
   @override
@@ -154,6 +155,12 @@ class _FakeNotificationService implements NotificationServiceBase {
 
   @override
   Future<void> previewMindfulnessBell(String soundId) async {}
+
+  @override
+  Future<void> scheduleMindfulnessTest({
+    required String soundId,
+    int minutesFromNow = 1,
+  }) async {}
 
   @override
   Future<void> scheduleSnooze({

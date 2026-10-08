@@ -101,7 +101,7 @@ class _RecordingService implements NotificationServiceBase {
   Future<void> cancelIntervalReminder(String reminderId) async {}
 
   @override
-  Future<void> scheduleMindfulnessBells({
+  Future<int> scheduleMindfulnessBells({
     required String soundId,
     required List<tz.TZDateTime> whenList,
   }) async {
@@ -110,6 +110,7 @@ class _RecordingService implements NotificationServiceBase {
       'soundId': soundId,
       'whenList': whenList,
     });
+    return whenList.length;
   }
 
   @override
@@ -119,6 +120,12 @@ class _RecordingService implements NotificationServiceBase {
 
   @override
   Future<void> previewMindfulnessBell(String soundId) async {}
+
+  @override
+  Future<void> scheduleMindfulnessTest({
+    required String soundId,
+    int minutesFromNow = 1,
+  }) async {}
 
   @override
   Future<void> scheduleSnooze({
