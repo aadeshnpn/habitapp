@@ -66,8 +66,9 @@ class _MindfulnessBellScreenState extends ConsumerState<MindfulnessBellScreen> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Enable mindfulness bell'),
           subtitle: const Text(
-            'Plays a short sound and vibration during your window. '
-            'No tap or logging required.',
+            'Plays a 3–5s reverberating bell on media volume during your '
+            'window (works in silent/vibrate). A silent status notice '
+            'auto-dismisses after 10 seconds.',
           ),
           value: draft.enabled,
           onChanged: _saving ? null : (v) => _onEnableChanged(draft, v),
@@ -201,13 +202,14 @@ class _MindfulnessBellScreenState extends ConsumerState<MindfulnessBellScreen> {
             leading: const Icon(Icons.notifications_active_outlined),
             title: const Text('Preview bell now'),
             subtitle: Text(
-              'Sound: ${draft.soundId}. Raise notification volume '
-              '(not media) if silent.',
+              'Media stream · ${draft.soundId}. Raise media volume; '
+              'works even if the phone is on vibrate/silent.',
             ),
             onTap: () => _runDebug(() async {
               await NotificationService.instance
                   .previewMindfulnessBell(draft.soundId);
-              return 'Mindfulness preview sent — listen for the bell sound';
+              return 'Playing on MEDIA volume for ~4s; status chip hides at 10s. '
+                  'If silent, raise media volume.';
             }),
           ),
           ListTile(
@@ -215,14 +217,14 @@ class _MindfulnessBellScreenState extends ConsumerState<MindfulnessBellScreen> {
             leading: const Icon(Icons.schedule_outlined),
             title: const Text('Schedule mindfulness test in 1 minute'),
             subtitle: const Text(
-              'Uses the mindfulness channel + selected sound',
+              'Media playback + silent status notice (auto-hides in 10s)',
             ),
             onTap: () => _runDebug(() async {
               await NotificationService.instance.scheduleMindfulnessTest(
                 soundId: draft.soundId,
                 minutesFromNow: 1,
               );
-              return 'Mindfulness test scheduled — leave the app and wait ~1 min';
+              return 'Mindfulness media test in ~1 min — leave the app';
             }),
           ),
           ListTile(

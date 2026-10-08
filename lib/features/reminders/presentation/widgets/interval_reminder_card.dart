@@ -97,10 +97,14 @@ class IntervalReminderCard extends ConsumerWidget {
                                 size: 13,
                                 color: theme.colorScheme.onSurfaceVariant),
                             const SizedBox(width: 4),
-                            Text(
-                              '${_intervalLabel()} · ${reminder.windowStart}–${reminder.windowEnd}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            Expanded(
+                              child: Text(
+                                '${_intervalLabel()} · ${reminder.windowStart}–${reminder.windowEnd}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],

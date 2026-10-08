@@ -316,15 +316,14 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: const [
                 _PresetChip(emoji: '💧', label: 'Water'),
-                const SizedBox(width: 8),
                 _PresetChip(emoji: '💊', label: 'Meds'),
-                const SizedBox(width: 8),
                 _PresetChip(emoji: '🚶', label: 'Steps'),
-                const SizedBox(width: 8),
                 _PresetChip(emoji: '🍎', label: 'Food'),
               ],
             ),
