@@ -31,6 +31,7 @@ class AddHabitScreen extends ConsumerStatefulWidget {
 class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   String _selectedEmoji = EmojiPickerSheet.defaultSuggestions.first;
   Color _selectedColor = _kColorOptions.first;
@@ -47,6 +48,7 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -91,9 +93,11 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
     setState(() => _isSaving = true);
     try {
       final repo = ref.read(habitRepositoryProvider);
+      final description = _descriptionController.text.trim();
       final habit = await repo.createHabit(
         CreateHabitParams(
           name: _nameController.text.trim(),
+          description: description.isEmpty ? null : description,
           icon: _selectedEmoji,
           color: _selectedColor.value,
           frequencyType: _frequencyType,
@@ -212,6 +216,27 @@ class _AddHabitScreenState extends ConsumerState<AddHabitScreen> {
                 }
                 return null;
               },
+            ),
+            const SizedBox(height: 16),
+
+            // Optional description (helps Health Connect matching)
+            TextFormField(
+              controller: _descriptionController,
+              maxLength: 200,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Description (optional)',
+                hintText: 'e.g. running, trail run, jogging',
+                helperText:
+                    'Used to match Health Connect activities to this habit',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.notes_outlined),
+                alignLabelWithHint: true,
+              ),
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.done,
             ),
             const SizedBox(height: 24),
 
