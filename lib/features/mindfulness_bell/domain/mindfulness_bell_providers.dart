@@ -14,11 +14,18 @@ final mindfulnessBellConfigProvider =
 });
 
 /// Saves config and triggers a full notification reschedule.
-Future<void> saveMindfulnessBellConfig(
+/// Returns how many mindfulness alarms were registered.
+Future<int> saveMindfulnessBellConfig(
   WidgetRef ref,
   MindfulnessBellConfig config,
 ) async {
   await ref.read(mindfulnessBellStoreProvider).save(config);
   ref.invalidate(mindfulnessBellConfigProvider);
+  // Schedule mindfulness immediately so Save does not race the keepAlive
+  // provider (which may still be waiting on habits/streaks).
+  final scheduled = await ref
+      .read(notificationSchedulerProvider)
+      .refreshMindfulnessBell(config);
   ref.invalidate(scheduleNotificationsProvider);
+  return scheduled;
 }

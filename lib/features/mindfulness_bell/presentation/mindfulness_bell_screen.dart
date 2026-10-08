@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/notifications/notification_service.dart';
 import '../domain/mindfulness_bell_config.dart';
 import '../domain/mindfulness_bell_providers.dart';
+import '../domain/mindfulness_bell_scheduler.dart';
 
 class MindfulnessBellScreen extends ConsumerStatefulWidget {
   const MindfulnessBellScreen({super.key});
@@ -178,8 +181,113 @@ class _MindfulnessBellScreenState extends ConsumerState<MindfulnessBellScreen> {
                 )
               : const Text('Save'),
         ),
+        if (kDebugMode) ...[
+          const SizedBox(height: 24),
+          const Divider(),
+          Text(
+            'Debug tests',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Only visible in debug builds.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Preview bell now'),
+            subtitle: Text(
+              'Sound: ${draft.soundId}. Raise notification volume '
+              '(not media) if silent.',
+            ),
+            onTap: () => _runDebug(() async {
+              await NotificationService.instance
+                  .previewMindfulnessBell(draft.soundId);
+              return 'Mindfulness preview sent — listen for the bell sound';
+            }),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.schedule_outlined),
+            title: const Text('Schedule mindfulness test in 1 minute'),
+            subtitle: const Text(
+              'Uses the mindfulness channel + selected sound',
+            ),
+            onTap: () => _runDebug(() async {
+              await NotificationService.instance.scheduleMindfulnessTest(
+                soundId: draft.soundId,
+                minutesFromNow: 1,
+              );
+              return 'Mindfulness test scheduled — leave the app and wait ~1 min';
+            }),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.refresh_outlined),
+            title: const Text('Reschedule from current draft'),
+            subtitle: const Text('Shows how many OS alarms were registered'),
+            onTap: () => _runDebug(() async {
+              final toSave = draft.copyWith(enabled: true);
+              final count = await saveMindfulnessBellConfig(ref, toSave);
+              setState(() => _draft = toSave);
+              final next = _nextSlotLabel(toSave);
+              if (count == 0) {
+                return 'Enabled but 0 alarms scheduled. $next';
+              }
+              return 'Scheduled $count alarm(s). $next';
+            }),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.inbox_outlined),
+            title: const Text('Pending notification count'),
+            onTap: () => _runDebug(() async {
+              final n = await NotificationService.instance
+                  .pendingNotificationCount();
+              return n < 0
+                  ? 'Pending count unavailable'
+                  : '$n pending notification(s) in the OS queue';
+            }),
+          ),
+        ],
       ],
     );
+  }
+
+  Future<void> _runDebug(Future<String> Function() action) async {
+    try {
+      final message = await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Bad state: ', '')),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
+  }
+
+  String _nextSlotLabel(MindfulnessBellConfig config) {
+    final slots = MindfulnessBellScheduler.generateSlots(
+      config: config,
+      now: tz.TZDateTime.now(tz.local),
+    );
+    if (slots.isEmpty) {
+      return 'No upcoming slots in the active window (check start/end times).';
+    }
+    final next = slots.first;
+    final hh = next.hour.toString().padLeft(2, '0');
+    final mm = next.minute.toString().padLeft(2, '0');
+    return 'Next ring ~$hh:$mm (${next.month}/${next.day}).';
   }
 
   void _update(MindfulnessBellConfig next) {
@@ -225,10 +333,18 @@ class _MindfulnessBellScreenState extends ConsumerState<MindfulnessBellScreen> {
       _saving = true;
     });
     try {
-      await saveMindfulnessBellConfig(ref, toSave);
+      final count = await saveMindfulnessBellConfig(ref, toSave);
       if (!mounted) return;
+      final next = _nextSlotLabel(toSave);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mindfulness bell scheduled')),
+        SnackBar(
+          content: Text(
+            count == 0
+                ? 'Saved, but no alarms registered. $next'
+                : 'Mindfulness bell scheduled ($count). $next',
+          ),
+          duration: const Duration(seconds: 5),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);

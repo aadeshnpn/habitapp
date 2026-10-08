@@ -128,10 +128,11 @@ class NotificationScheduler {
   }
 
   /// Schedule or cancel mindfulness bell one-shots from [config].
-  Future<void> refreshMindfulnessBell(MindfulnessBellConfig config) async {
+  /// Returns how many OS alarms were registered (0 when disabled/empty).
+  Future<int> refreshMindfulnessBell(MindfulnessBellConfig config) async {
     if (!config.enabled) {
       await _service.cancelMindfulnessBells();
-      return;
+      return 0;
     }
 
     final now = tz.TZDateTime.now(tz.local);
@@ -139,7 +140,11 @@ class NotificationScheduler {
       config: config,
       now: now,
     );
-    await _service.scheduleMindfulnessBells(
+    if (slots.isEmpty) {
+      await _service.cancelMindfulnessBells();
+      return 0;
+    }
+    return _service.scheduleMindfulnessBells(
       soundId: config.soundId,
       whenList: slots,
     );

@@ -4,9 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'notification_service.dart';
 
-/// Consumes optional Android launch extras (`notif_test=show|schedule`) used by
-/// emulator/CI verification via:
+/// Consumes optional Android launch extras (`notif_test=...`) used by
+/// emulator/CI / phone verification via:
 /// `adb shell am start ... --es notif_test show`
+///
+/// Supported values: `show`, `schedule`, `mindfulness_show`, `mindfulness_schedule`.
 class NotificationTestBridge {
   static const _channel = MethodChannel('habitapp/notif_test');
 
@@ -29,6 +31,17 @@ class NotificationTestBridge {
           await NotificationService.instance
               .scheduleTestNotification(minutesFromNow: 1);
           debugPrint('NotificationTestBridge: 1-minute schedule fired');
+          break;
+        case 'mindfulness_show':
+          await NotificationService.instance.previewMindfulnessBell('bowl');
+          debugPrint('NotificationTestBridge: mindfulness preview fired');
+          break;
+        case 'mindfulness_schedule':
+          await NotificationService.instance.scheduleMindfulnessTest(
+            soundId: 'bowl',
+            minutesFromNow: 1,
+          );
+          debugPrint('NotificationTestBridge: mindfulness 1-min schedule fired');
           break;
         default:
           debugPrint('NotificationTestBridge: unknown command $pending');

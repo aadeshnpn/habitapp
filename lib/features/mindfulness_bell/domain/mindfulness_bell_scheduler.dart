@@ -28,8 +28,9 @@ class MindfulnessBellScheduler {
 
     // Schedule remaining times for today, then the full tomorrow window so
     // bells keep working overnight without requiring the app to reopen.
+    final today = tz.TZDateTime(now.location, now.year, now.month, now.day);
     for (final dayOffset in [0, 1]) {
-      final day = now.add(Duration(days: dayOffset));
+      final day = today.add(Duration(days: dayOffset));
       final windowStart = tz.TZDateTime(
         now.location,
         day.year,
